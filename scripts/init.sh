@@ -17,6 +17,19 @@ mkdir -p \
   "${PRIVATE_DIR}/tmp" \
   "${PRIVATE_DIR}/run"
 
+mkdir -p \
+  "${ROOT_DIR}/memory/birth" \
+  "${ROOT_DIR}/memory/diary" \
+  "${ROOT_DIR}/memory/decisions" \
+  "${ROOT_DIR}/memory/lessons" \
+  "${ROOT_DIR}/memory/proposals" \
+  "${ROOT_DIR}/memory/incidents" \
+  "${ROOT_DIR}/mailbox/inbox" \
+  "${ROOT_DIR}/mailbox/processing" \
+  "${ROOT_DIR}/mailbox/outbox" \
+  "${ROOT_DIR}/mailbox/done" \
+  "${ROOT_DIR}/mailbox/failed"
+
 ensure_symlink() {
   local link_path="$1"
   local link_target="$2"

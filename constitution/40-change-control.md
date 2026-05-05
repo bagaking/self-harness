@@ -59,6 +59,10 @@ Supervisor and commit scripts should enforce these checks mechanically:
 - Check that `constitution/` contains no symlinked files.
 - Check Markdown frontmatter in long-term documents.
 
+Codex runs should not write `.git/` directly. Staging and committing are supervisor responsibilities after the Codex process exits.
+
+If a human explicitly directs a constitutional update, the supervisor may commit it with an explicit constitution override. Agents must not use that override on their own initiative.
+
 ## Long-Term Drift Control
 
 The system should expect drift and design against it.
