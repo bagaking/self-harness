@@ -12,6 +12,7 @@ LOCK_DIR="${RUN_DIR}/supervisor.lock"
 LOCK_INFO="${LOCK_DIR}/info"
 PID_FILE="${RUN_DIR}/supervisor.pid"
 LOOP_LOG="${LOG_DIR}/supervisor.log"
+GATE_REPORT="${TMP_DIR}/commit-gate-last-report.md"
 
 CODEX_HOME_DIR="${ROOT_DIR}/.codex"
 SESSIONS_DIR="${ROOT_DIR}/sessions"
@@ -151,13 +152,15 @@ choose_mode() {
 build_boot_prompt() {
   local mode="$1"
   cat <<EOF
-You are running inside the self-harness repository at ${ROOT_DIR}.
+You are running inside the self-harness repository.
 
 Mode: ${mode}
 
 Read AGENTS.md first. Then use scripts/query-docs.sh to discover and read relevant constitution documents. Do not modify constitution/.
 
 This repository is the agent itself. sessions/, mailbox/, memory/, and skills/ are commit-worthy agent state. Temporary or private work belongs only under .self-harness/.
+
+Keep committed content portable: use repository-relative paths, do not modify files outside this repository, and do not expose local usernames, hostnames, home directories, or machine-specific absolute paths. Use .self-harness/tmp/ for experiments, reference clones, temporary projects, and subagent experiment sandboxes.
 
 Primary task for this run:
 - Inspect repository state.
@@ -180,6 +183,66 @@ has_git_changes() {
   [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=all)" ]
 }
 
+staged_or_changed_files() {
+  {
+    git -C "$ROOT_DIR" diff --name-only
+    git -C "$ROOT_DIR" diff --cached --name-only
+    git -C "$ROOT_DIR" ls-files --others --exclude-standard
+  } | awk 'NF' | sort -u
+}
+
+is_portability_checked_path() {
+  local rel="$1"
+  case "$rel" in
+    AGENTS.md|constitution/*.md|memory/*.md|memory/**/*.md|mailbox/*.md|mailbox/**/*.md|scripts/*.sh)
+      return 0
+      ;;
+    skills/.system/*|sessions/*)
+      return 1
+      ;;
+    skills/*.md|skills/**/*.md)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+check_portable_content() {
+  local errors=0
+  local file rel
+
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    file="${ROOT_DIR}/${rel}"
+    [ -f "$file" ] || continue
+    is_portability_checked_path "$rel" || continue
+
+    if LC_ALL=C rg -n --color never '(^|[^[:alnum:]_.-])(/Users|/home)/[^[:space:]`'"'"'"]+' "$file"; then
+      errors=$((errors + 1))
+    fi
+
+    if LC_ALL=C rg -n --color never '(^|[^[:alnum:]_.-])(/private/tmp|/var/folders)/[^[:space:]`'"'"'"]+' "$file"; then
+      errors=$((errors + 1))
+    fi
+
+    if LC_ALL=C rg -n --color never '(HOSTNAME|USER|USERNAME|LOGNAME|HOME)=[^[:space:]`'"'"'"]+' "$file"; then
+      errors=$((errors + 1))
+    fi
+
+    if LC_ALL=C rg -n --color never '~/(Desktop|Documents|Downloads|Library|Movies|Music|Pictures|proj|Projects|workspace|work)/[^[:space:]`'"'"'"]*' "$file"; then
+      errors=$((errors + 1))
+    fi
+
+  done < <(staged_or_changed_files)
+
+  if [ "$errors" -gt 0 ]; then
+    echo "commit gate failed: portable content check found local paths, device details, or outside-repo write instructions" >&2
+    return 1
+  fi
+}
+
 run_commit_gate() {
   local allow_constitution="${1:-0}"
   init_layout
@@ -198,6 +261,8 @@ run_commit_gate() {
     echo "commit gate failed: mailbox contains temporary output files" >&2
     return 1
   fi
+
+  check_portable_content
 
   "${ROOT_DIR}/scripts/docs-check.sh"
 
@@ -282,6 +347,82 @@ commit_changes() {
   fi
 }
 
+build_gate_repair_prompt() {
+  local report="$1"
+  cat <<EOF
+The supervisor commit gate failed after your previous run.
+
+Read AGENTS.md and the relevant constitution files, then fix only the reported issues. Keep the repair small.
+
+Rules to preserve:
+- Use repository-relative paths in committed content.
+- Do not modify files outside this repository.
+- Do not expose local usernames, hostnames, home directories, or machine-specific absolute paths.
+- Do not modify constitution/.
+- Use .self-harness/tmp/ for experiments and temporary files.
+- Run scripts/docs-check.sh before finishing.
+- Do not run git add or git commit; the supervisor will commit after you exit.
+
+Gate report:
+
+$(sed 's/^/> /' "$report")
+EOF
+}
+
+ask_session_to_repair_gate_once() {
+  local report="$1"
+  init_layout
+  acquire_lock || return 1
+  trap release_lock EXIT
+
+  local output command prompt
+  output="${TMP_DIR}/codex-gate-repair-$(date -u +%Y%m%dT%H%M%SZ).md"
+  prompt="$(build_gate_repair_prompt "$report")"
+  command="codex exec resume --last --all --output-last-message ${output} -"
+  write_lock_info "repair" "$command" "$$"
+
+  local extra_args=()
+  if [ -n "${SELF_HARNESS_CODEX_ARGS:-}" ]; then
+    # shellcheck disable=SC2206
+    extra_args=(${SELF_HARNESS_CODEX_ARGS})
+  fi
+
+  export CODEX_HOME="$CODEX_HOME_DIR"
+
+  local status=0
+  set +e
+  if [ "${#extra_args[@]}" -gt 0 ]; then
+    printf '%s\n' "$prompt" | codex exec resume --last --all --output-last-message "$output" "${extra_args[@]}" -
+  else
+    printf '%s\n' "$prompt" | codex exec resume --last --all --output-last-message "$output" -
+  fi
+  status=$?
+  set -e
+
+  release_lock
+  trap - EXIT
+  return "$status"
+}
+
+commit_changes_with_repair() {
+  local status=0
+  commit_changes "$@" >"$GATE_REPORT" 2>&1 || status=$?
+  if [ "$status" -eq 0 ]; then
+    cat "$GATE_REPORT"
+    return 0
+  fi
+
+  log "post-run commit gate failed; asking Codex session for one repair attempt"
+  cat "$GATE_REPORT" >&2
+
+  if ! ask_session_to_repair_gate_once "$GATE_REPORT"; then
+    log "gate repair run failed"
+    return "$status"
+  fi
+
+  commit_changes "$@"
+}
+
 run_codex_once() {
   init_layout
   acquire_lock || return 0
@@ -331,7 +472,7 @@ run_codex_once() {
   trap - EXIT
 
   if [ "${SELF_HARNESS_SKIP_COMMIT:-0}" != "1" ]; then
-    if ! commit_changes; then
+    if ! commit_changes_with_repair; then
       log "post-run commit failed"
       return 1
     fi

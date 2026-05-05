@@ -21,6 +21,10 @@ This repository is the self-harness evolution workspace. Treat `constitution/` a
 
 This project is the agent itself: `sessions/`, `mailbox/`, `memory/`, and `skills/` are repository-visible body and memory, so do not hide them with `.gitignore`. Temporary or private material that should not be recorded belongs only under `.self-harness/`, which is created by `scripts/init.sh` and ignored by git.
 
+Keep repository content portable and non-local. Write paths relative to the repository root, do not modify files outside this repository, and do not expose local device details such as hostnames, usernames, home directories, or machine-specific absolute paths in committed content.
+
+Use `.self-harness/tmp/` for experiments that should not become durable state, including cloned reference projects, throwaway worktrees, temporary tools, and subagent experiment sandboxes. Promote only reviewed, portable results into `memory/`, `skills/`, `mailbox/`, or `scripts/`.
+
 If this checkout is on an `agent/no_x_<name_or_purpose>` branch, treat that branch as your own evolving lineage and read `constitution/50-agent-branch-birth.md`.
 
 ## Welcome, `agent/no0_self_imporve`

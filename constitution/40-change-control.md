@@ -53,6 +53,7 @@ Supervisor and commit scripts should enforce these checks mechanically:
 - Preserve mailbox inputs or leave an auditable output record.
 - Prefer append-only or proposal-based updates for uncertain memory.
 - Refuse to commit obvious secrets, runtime locks, temporary files, or Codex private config.
+- Refuse to commit newly written portable documents or scripts that expose local hostnames, usernames, home directories, machine-specific absolute paths, or instructions to modify files outside the repository.
 - Keep `.codex/`, `.self-harness/`, runtime locks, and private config out of git.
 - Treat `sessions/` and `mailbox/` as commit-worthy agent state, while still checking them for obvious secrets and half-written temporary files.
 - Do not add broad ignore rules that hide agent state. Ignoring `sessions/` or `mailbox/` is a known bad counterexample because it hides the agent's own history.
@@ -60,6 +61,8 @@ Supervisor and commit scripts should enforce these checks mechanically:
 - Check Markdown frontmatter in long-term documents.
 
 Codex runs should not write `.git/` directly. Staging and committing are supervisor responsibilities after the Codex process exits.
+
+If a supervisor commit gate fails because of fixable content hygiene issues, the supervisor should record a concise diagnostic and resume the active Codex session once so the agent can repair its own output. If the repaired state still fails the gate, the supervisor should stop and leave the diagnostic for human review.
 
 If a human explicitly directs a constitutional update, the supervisor may commit it with an explicit constitution override. Agents must not use that override on their own initiative.
 
