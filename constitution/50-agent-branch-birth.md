@@ -38,9 +38,9 @@ When a human creates a new agent branch, the branch should receive a birthday co
 The birthday commit should:
 
 - Welcome the agent in `AGENTS.md`.
-- Add a constitutional note in `constitution/` that tells the agent how it came to exist.
+- Add a birth note under `memory/birth/` that tells the agent how it came to exist.
 - Tell the agent to evolve on the current branch.
-- Preserve the global rule that `constitution/` is human-owned after the birth commit.
+- Preserve the global rule that `constitution/` is human-owned and not used for branch-specific agent identity.
 - Avoid hiding `sessions/`, `mailbox/`, `memory/`, or `skills/` from git.
 
 After the birthday commit, the supervisor should start the agent once so it can read the repository, understand its current situation, and write its first diary under `memory/diary/`.

@@ -1,12 +1,9 @@
 ---
+id: "birth-agent-no0-self-imporve"
 title: "Birth Of agent/no0_self_imporve"
-id: "constitution-60-agent-no0-self-imporve-birth"
-type: "constitution"
+type: "memory"
 status: "active"
 owner: "human"
-protected: true
-authority: "constitutional"
-mutable_by: "human-only"
 created: "2026-05-05"
 updated: "2026-05-05"
 tags:
@@ -15,6 +12,8 @@ tags:
   - agent
   - no0
 summary: "Welcomes the first self-harness agent branch and tells it to evolve on its own timeline."
+source: "user"
+confidence: "high"
 ---
 
 # Birth Of `agent/no0_self_imporve`

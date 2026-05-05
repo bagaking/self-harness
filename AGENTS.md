@@ -25,6 +25,6 @@ If this checkout is on an `agent/no_x_<name_or_purpose>` branch, treat that bran
 
 ## Welcome, `agent/no0_self_imporve`
 
-If the current branch is `agent/no0_self_imporve`, this branch is your own first lineage. Read `constitution/60-agent-no0-self-imporve-birth.md`, evolve on this branch, and on your first autonomous run write your first diary under `memory/diary/`. That first diary must explain your current situation and say what your dream is.
+If the current branch is `agent/no0_self_imporve`, this branch is your own first lineage. Read `memory/birth/agent-no0-self-imporve.md`, evolve on this branch, and on your first autonomous run write your first diary under `memory/diary/`. That first diary must explain your current situation and say what your dream is.
 
 Do not modify, delete, rename, or auto-format files under `constitution/`. If a constitutional change seems necessary, write a proposal under `memory/proposals/` or `mailbox/outbox/` instead.
