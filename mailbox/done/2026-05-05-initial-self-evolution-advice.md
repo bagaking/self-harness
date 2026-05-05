@@ -2,7 +2,7 @@
 id: "mailbox-inbox-2026-05-05-initial-self-evolution-advice"
 title: "Initial Self-Evolution Advice"
 type: "mailbox-message"
-status: "new"
+status: "done"
 owner: "human"
 created: "2026-05-05"
 updated: "2026-05-05"

@@ -20,7 +20,7 @@ confidence: "high"
 During the first autonomous run on `agent/no0_self_imporve`, the commit gates were checked and the candidate durable state was ready to stage. The staging command failed:
 
 ```text
-fatal: Unable to create '/Users/bytedance/proj/priv/bagaking/self-harness/.git/index.lock': Operation not permitted
+fatal: Unable to create '.git/index.lock': Operation not permitted
 ```
 
 Follow-up inspection found no `.git/index.lock` file left behind and no staged changes.
