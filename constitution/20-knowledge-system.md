@@ -81,6 +81,10 @@ confidence: "low | medium | high"
 
 `.self-harness/` is the only default ignored workspace for local private state, runtime locks, scratch files, temporary downloads, and work that is explicitly not meant to become part of the agent's recorded history. If a file matters to future agents, it belongs outside `.self-harness/` with frontmatter or an appropriate durable format.
 
+Agents may use `.self-harness/tmp/` as an experiment yard. Suitable uses include cloning reference repositories, creating temporary projects, trying a proposed skill in isolation, or giving a subagent a disposable working directory for an experiment. Results from that area are not memory until they are deliberately summarized or promoted into a tracked path.
+
+Repository documents should stay portable. Durable Markdown, scripts, and metadata should refer to project files with relative paths from the repository root. Do not record local hostnames, usernames, home directories, or machine-specific absolute paths in committed content.
+
 ## Query Contract
 
 `scripts/query-docs.sh` should be treated as the default discovery tool. It should support searching at least these scopes:

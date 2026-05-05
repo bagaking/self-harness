@@ -100,6 +100,7 @@ Before committing, the supervisor must check:
 - No temporary mailbox output is left half-written.
 - No unfinished `mailbox/processing/` files remain unless explicitly justified.
 - No lock or pidfile intended only for runtime control is committed.
+- No portable repository document or script leaks local machine details or machine-specific absolute paths.
 - `scripts/docs-check.sh` passes.
 - Shell scripts changed in the commit pass `bash -n`.
 - Relevant tests or script checks were run, or the diary states why they were not.
@@ -107,3 +108,5 @@ Before committing, the supervisor must check:
 If `constitution/` changed, the agent must not commit. It must write a report under `mailbox/outbox/` or `memory/proposals/` and wait for human action.
 
 Human-directed constitutional commits may be made through `scripts/supervisor.sh commit --allow-constitution`. This flag is an explicit override for human use, not an agent escape hatch.
+
+If an autonomous post-run commit fails on fixable hygiene checks, the supervisor should ask the same Codex session to repair the problem once, then retry the commit gate.

@@ -50,6 +50,8 @@ This project is the agent itself. The default assumption is that repository stat
 
 Anything temporary, private, experimental, or not intended for the historical record must be placed under `.self-harness/`. Agents must not scatter untracked private state elsewhere in the project.
 
+Committed repository content should be portable. Agents must write repository-relative paths, must not expose local device details such as hostnames, usernames, home directories, or machine-specific absolute paths, and must not modify files outside the repository. The supervisor should enforce simple checks for these mistakes before committing.
+
 ## Discovery
 
 The system must not depend on hand-maintained index files for knowledge discovery. Indexes drift. Repository documents should include YAML frontmatter, and agents should use query scripts such as `scripts/query-docs.sh` to discover relevant documents and inspect their frontmatter.
