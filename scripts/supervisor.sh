@@ -195,12 +195,20 @@ run_codex_once() {
   if [ "$mode" = "resume" ]; then
     command="codex exec resume --last --all --output-last-message ${output} -"
     write_lock_info "$mode" "$command" "$$"
-    printf '%s\n' "$prompt" | codex exec resume --last --all --output-last-message "$output" "${extra_args[@]}" -
+    if [ "${#extra_args[@]}" -gt 0 ]; then
+      printf '%s\n' "$prompt" | codex exec resume --last --all --output-last-message "$output" "${extra_args[@]}" -
+    else
+      printf '%s\n' "$prompt" | codex exec resume --last --all --output-last-message "$output" -
+    fi
     status=$?
   else
     command="codex exec --cd ${ROOT_DIR} --output-last-message ${output} -"
     write_lock_info "$mode" "$command" "$$"
-    printf '%s\n' "$prompt" | codex exec --cd "$ROOT_DIR" --output-last-message "$output" "${extra_args[@]}" -
+    if [ "${#extra_args[@]}" -gt 0 ]; then
+      printf '%s\n' "$prompt" | codex exec --cd "$ROOT_DIR" --output-last-message "$output" "${extra_args[@]}" -
+    else
+      printf '%s\n' "$prompt" | codex exec --cd "$ROOT_DIR" --output-last-message "$output" -
+    fi
     status=$?
   fi
   set -e
