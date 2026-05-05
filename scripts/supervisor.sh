@@ -13,6 +13,8 @@ LOCK_INFO="${LOCK_DIR}/info"
 PID_FILE="${RUN_DIR}/supervisor.pid"
 LOOP_LOG="${LOG_DIR}/supervisor.log"
 GATE_REPORT="${TMP_DIR}/commit-gate-last-report.md"
+LAUNCHD_LABEL="com.bagaking.self-harness.supervisor"
+LAUNCHD_PLIST="${RUN_DIR}/${LAUNCHD_LABEL}.plist"
 
 CODEX_HOME_DIR="${ROOT_DIR}/.codex"
 SESSIONS_DIR="${ROOT_DIR}/sessions"
@@ -493,21 +495,117 @@ run_loop() {
   done
 }
 
+launchd_domain() {
+  echo "gui/$(id -u)"
+}
+
+launchd_available() {
+  [ "$(uname -s)" = "Darwin" ] && command -v launchctl >/dev/null 2>&1
+}
+
+launchd_is_loaded() {
+  launchd_available || return 1
+  launchctl print "$(launchd_domain)/${LAUNCHD_LABEL}" >/dev/null 2>&1
+}
+
+plist_escape() {
+  sed \
+    -e 's/&/\&amp;/g' \
+    -e 's/</\&lt;/g' \
+    -e 's/>/\&gt;/g' \
+    -e 's/"/\&quot;/g' \
+    -e "s/'/\&apos;/g"
+}
+
+write_launchd_plist() {
+  local script_path path_value
+  script_path="${ROOT_DIR}/scripts/supervisor.sh"
+  path_value="${PATH:-/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin}"
+
+  cat >"$LAUNCHD_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$(printf '%s' "$LAUNCHD_LABEL" | plist_escape)</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(printf '%s' "$script_path" | plist_escape)</string>
+    <string>loop</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>$(printf '%s' "$ROOT_DIR" | plist_escape)</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>$(printf '%s' "$path_value" | plist_escape)</string>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>$(printf '%s' "$LOOP_LOG" | plist_escape)</string>
+  <key>StandardErrorPath</key>
+  <string>$(printf '%s' "$LOOP_LOG" | plist_escape)</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+</dict>
+</plist>
+EOF
+}
+
+start_launchd() {
+  init_layout
+  if launchd_is_loaded; then
+    echo "supervisor already loaded: ${LAUNCHD_LABEL}"
+    echo "log: $LOOP_LOG"
+    return 0
+  fi
+
+  write_launchd_plist
+  launchctl bootstrap "$(launchd_domain)" "$LAUNCHD_PLIST"
+  launchctl kickstart -k "$(launchd_domain)/${LAUNCHD_LABEL}"
+  echo "started supervisor via launchd: ${LAUNCHD_LABEL}"
+  echo "log: $LOOP_LOG"
+}
+
+stop_launchd() {
+  if ! launchd_available; then
+    return 1
+  fi
+
+  if launchd_is_loaded; then
+    launchctl bootout "$(launchd_domain)" "$LAUNCHD_PLIST" 2>/dev/null \
+      || launchctl bootout "$(launchd_domain)/${LAUNCHD_LABEL}" 2>/dev/null \
+      || true
+    echo "stopped launchd supervisor: ${LAUNCHD_LABEL}"
+  fi
+}
+
 start_background() {
   init_layout
+  if launchd_available; then
+    start_launchd
+    return 0
+  fi
+
   if [ -f "$PID_FILE" ] && is_pid_alive "$(cat "$PID_FILE")"; then
     echo "supervisor already running: pid=$(cat "$PID_FILE")"
     return 0
   fi
-  nohup "$0" loop >>"$LOOP_LOG" 2>&1 &
+  nohup "${ROOT_DIR}/scripts/supervisor.sh" loop >>"$LOOP_LOG" 2>&1 &
   echo "$!" >"$PID_FILE"
   echo "started supervisor: pid=$!"
   echo "log: $LOOP_LOG"
 }
 
 stop_background() {
+  stop_launchd || true
+
   if [ ! -f "$PID_FILE" ]; then
-    echo "supervisor is not running"
+    if ! launchd_is_loaded; then
+      echo "supervisor is not running"
+    fi
     return 0
   fi
   local pid
@@ -523,7 +621,9 @@ stop_background() {
 
 status() {
   init_layout
-  if [ -f "$PID_FILE" ] && is_pid_alive "$(cat "$PID_FILE")"; then
+  if launchd_is_loaded; then
+    echo "supervisor: loaded via launchd (${LAUNCHD_LABEL})"
+  elif [ -f "$PID_FILE" ] && is_pid_alive "$(cat "$PID_FILE")"; then
     echo "supervisor: running pid=$(cat "$PID_FILE")"
   else
     echo "supervisor: stopped"
