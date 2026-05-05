@@ -73,6 +73,7 @@ check_no_forbidden_indexes() {
   done < <(find "$ROOT_DIR" \
     -path "$ROOT_DIR/.git" -prune -o \
     -path "$ROOT_DIR/.codex" -prune -o \
+    -path "$ROOT_DIR/.self-harness" -prune -o \
     -type f -name '*.md' -print)
 }
 
@@ -106,6 +107,7 @@ check_duplicate_ids() {
   done < <(find "$ROOT_DIR" \
     -path "$ROOT_DIR/.git" -prune -o \
     -path "$ROOT_DIR/.codex" -prune -o \
+    -path "$ROOT_DIR/.self-harness" -prune -o \
     -type f -name '*.md' -print)
 }
 
@@ -121,6 +123,7 @@ while IFS= read -r file; do
 done < <(find "$ROOT_DIR" \
   -path "$ROOT_DIR/.git" -prune -o \
   -path "$ROOT_DIR/.codex" -prune -o \
+  -path "$ROOT_DIR/.self-harness" -prune -o \
   -type f -name '*.md' -print)
 
 check_no_forbidden_indexes

@@ -45,6 +45,7 @@ idle
   -> process_mailbox
   -> update_memory_and_skills
   -> write_gfm_diary
+  -> codex_exit
   -> run_commit_gate
   -> commit_or_report
   -> release_lock
@@ -64,6 +65,8 @@ In failure states, the supervisor should write a report under `memory/incidents/
 
 The supervisor must be boring and conservative. It should not try to become an agent.
 
+Codex produces durable repository state. The supervisor owns staging and committing after the Codex process exits. Codex runs should not call `git add` or `git commit` directly; this keeps `.git/` writes in the deterministic control plane and lets the supervisor include the completed session transcript in the same commit.
+
 ## Resume Versus New
 
 Resume is preferred only when it is likely to preserve useful context without causing context-window exhaustion. Until an exact parser exists, the supervisor may use conservative heuristics such as session recency, file size, message count, and last known completion status.
@@ -81,6 +84,7 @@ When starting a new session, the boot prompt must require the agent to:
 - Improve `skills/` only when a reusable procedure is discovered.
 - Avoid all modifications under `constitution/`.
 - Produce a GFM diary suitable for use as the git commit message.
+- Leave staging and committing to `scripts/supervisor.sh`.
 
 ## Process Identity
 

@@ -73,7 +73,7 @@ Mailbox state is commit-worthy agent state, including inbox, outbox, done, faile
 
 ## Commit Diary
 
-When a new Codex session is started by the supervisor, the session should end by producing a GFM diary that can be used directly as the git commit message.
+When a new Codex session is started by the supervisor, the session should end by producing a GFM diary that can be used directly as the git commit message. The Codex process writes the diary; the supervisor stages and commits after Codex exits.
 
 The diary should include:
 
@@ -92,7 +92,7 @@ The preferred implementation is to write the diary as a frontmatter-bearing Mark
 
 ## Commit Gates
 
-Before committing, scripts or agents must check:
+Before committing, the supervisor must check:
 
 - `git diff -- constitution/` is empty.
 - `./.codex/skills` points to `../skills`.
@@ -105,3 +105,5 @@ Before committing, scripts or agents must check:
 - Relevant tests or script checks were run, or the diary states why they were not.
 
 If `constitution/` changed, the agent must not commit. It must write a report under `mailbox/outbox/` or `memory/proposals/` and wait for human action.
+
+Human-directed constitutional commits may be made through `scripts/supervisor.sh commit --allow-constitution`. This flag is an explicit override for human use, not an agent escape hatch.

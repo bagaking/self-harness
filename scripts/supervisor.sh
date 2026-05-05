@@ -30,6 +30,7 @@ Usage:
   scripts/supervisor.sh plan
   scripts/supervisor.sh once
   scripts/supervisor.sh loop
+  scripts/supervisor.sh commit [--allow-constitution] [-m MESSAGE | -F FILE] [-- PATH...]
   scripts/supervisor.sh start
   scripts/supervisor.sh stop
   scripts/supervisor.sh status
@@ -39,6 +40,7 @@ Environment:
   SELF_HARNESS_RESUME_MAX_AGE_SECONDS Latest-session age limit. Default: 21600.
   SELF_HARNESS_RESUME_MAX_BYTES       Latest-session size limit. Default: 600000.
   SELF_HARNESS_CODEX_ARGS             Extra args passed to codex exec/resume.
+  SELF_HARNESS_SKIP_COMMIT            Set to 1 to skip post-run commits.
 EOF
 }
 
@@ -162,10 +164,122 @@ Primary task for this run:
 - Read pending mailbox/inbox messages and produce durable replies or reports under mailbox/outbox.
 - Update memory/ when useful.
 - Improve skills/ only when a reusable procedure is discovered.
-- Run scripts/docs-check.sh before any autonomous commit.
+- Run scripts/docs-check.sh before finishing.
 - If this is a new session, review the repository and write a GFM diary under memory/diary suitable for use as the commit message.
-- Commit only when the commit gates in constitution/30-mailbox-and-commit.md are satisfied.
+- Do not run git add or git commit yourself. The supervisor owns staging and committing after this Codex process exits.
 EOF
+}
+
+latest_diary_file() {
+  find "${ROOT_DIR}/memory/diary" -type f -name '*.md' 2>/dev/null \
+    | sort \
+    | tail -1
+}
+
+has_git_changes() {
+  [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=all)" ]
+}
+
+run_commit_gate() {
+  local allow_constitution="${1:-0}"
+  init_layout
+
+  if [ "$allow_constitution" != "1" ] && ! git -C "$ROOT_DIR" diff --quiet -- constitution/; then
+    echo "commit gate failed: constitution/ has unstaged changes" >&2
+    return 1
+  fi
+
+  if find "${ROOT_DIR}/mailbox/processing" -maxdepth 1 -type f ! -name .gitkeep | rg -q .; then
+    echo "commit gate failed: mailbox/processing contains unfinished files" >&2
+    return 1
+  fi
+
+  if find "${ROOT_DIR}/mailbox" -type f \( -name '*.tmp' -o -name '*~' -o -name '.#*' -o -name 'outbox-*' \) | rg -q .; then
+    echo "commit gate failed: mailbox contains temporary output files" >&2
+    return 1
+  fi
+
+  "${ROOT_DIR}/scripts/docs-check.sh"
+
+  local script
+  for script in "${ROOT_DIR}"/scripts/*.sh; do
+    [ -f "$script" ] || continue
+    bash -n "$script"
+  done
+}
+
+commit_changes() {
+  local message=""
+  local message_file=""
+  local allow_constitution=0
+  local paths=()
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --allow-constitution)
+        allow_constitution=1
+        shift
+        ;;
+      -m|--message)
+        [ "$#" -ge 2 ] || {
+          echo "commit: missing message after $1" >&2
+          return 2
+        }
+        message="$2"
+        shift 2
+        ;;
+      -F|--message-file)
+        [ "$#" -ge 2 ] || {
+          echo "commit: missing file after $1" >&2
+          return 2
+        }
+        message_file="$2"
+        shift 2
+        ;;
+      --)
+        shift
+        while [ "$#" -gt 0 ]; do
+          paths+=("$1")
+          shift
+        done
+        ;;
+      *)
+        paths+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  run_commit_gate "$allow_constitution"
+
+  if ! has_git_changes; then
+    log "commit: no changes"
+    return 0
+  fi
+
+  if [ "${#paths[@]}" -gt 0 ]; then
+    git -C "$ROOT_DIR" add -- "${paths[@]}"
+  else
+    git -C "$ROOT_DIR" add --all -- .
+  fi
+
+  if git -C "$ROOT_DIR" diff --cached --quiet; then
+    log "commit: no staged changes"
+    return 0
+  fi
+
+  if [ -n "$message_file" ]; then
+    git -C "$ROOT_DIR" commit -F "$message_file"
+  elif [ -n "$message" ]; then
+    git -C "$ROOT_DIR" commit -m "$message"
+  else
+    message_file="$(latest_diary_file || true)"
+    if [ -n "$message_file" ]; then
+      git -C "$ROOT_DIR" commit -F "$message_file"
+    else
+      git -C "$ROOT_DIR" commit -m "run: record self-harness state"
+    fi
+  fi
 }
 
 run_codex_once() {
@@ -215,6 +329,14 @@ run_codex_once() {
 
   release_lock
   trap - EXIT
+
+  if [ "${SELF_HARNESS_SKIP_COMMIT:-0}" != "1" ]; then
+    if ! commit_changes; then
+      log "post-run commit failed"
+      return 1
+    fi
+  fi
+
   return "$status"
 }
 
@@ -283,6 +405,10 @@ case "${1:-}" in
     ;;
   once)
     run_codex_once
+    ;;
+  commit)
+    shift
+    commit_changes "$@"
     ;;
   loop)
     run_loop
