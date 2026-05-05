@@ -7,8 +7,15 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CODEX_DIR="${ROOT_DIR}/.codex"
 SKILLS_DIR="${ROOT_DIR}/skills"
 SESSIONS_DIR="${ROOT_DIR}/sessions"
+PRIVATE_DIR="${ROOT_DIR}/.self-harness"
 
-mkdir -p "${CODEX_DIR}" "${SKILLS_DIR}" "${SESSIONS_DIR}"
+mkdir -p \
+  "${CODEX_DIR}" \
+  "${SKILLS_DIR}" \
+  "${SESSIONS_DIR}" \
+  "${PRIVATE_DIR}/scratch" \
+  "${PRIVATE_DIR}/tmp" \
+  "${PRIVATE_DIR}/run"
 
 ensure_symlink() {
   local link_path="$1"
