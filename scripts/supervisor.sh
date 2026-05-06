@@ -532,13 +532,14 @@ terminate_process_tree() {
 
 run_with_watchdog() {
   local output="$1"
-  shift
+  local prompt_file="$2"
+  shift 2
 
   local start now last_activity idle child status
   start="$(date +%s)"
   last_activity="$(date +%s)"
 
-  "$@" &
+  "$@" <"$prompt_file" &
   child=$!
 
   while is_pid_alive "$child"; do
@@ -573,12 +574,14 @@ run_codex_once() {
   acquire_lock || return 0
   trap release_lock EXIT
 
-  local choice mode detail prompt output command
+  local choice mode detail prompt output prompt_file command
   choice="$(choose_mode)"
   mode="${choice%% *}"
   detail="${choice#${mode}}"
   output="${TMP_DIR}/codex-last-message-$(date -u +%Y%m%dT%H%M%SZ).md"
+  prompt_file="${TMP_DIR}/codex-prompt-$(date -u +%Y%m%dT%H%M%SZ).txt"
   prompt="$(build_boot_prompt "$mode")"
+  printf '%s\n' "$prompt" >"$prompt_file"
 
   log "choice: ${mode}${detail}"
 
@@ -596,22 +599,23 @@ run_codex_once() {
     command="codex exec resume --last --all --output-last-message ${output} -"
     write_lock_info "$mode" "$command" "$$"
     if [ "${#extra_args[@]}" -gt 0 ]; then
-      run_with_watchdog "$output" codex exec resume --last --all --output-last-message "$output" "${extra_args[@]}" - <<<"$prompt"
+      run_with_watchdog "$output" "$prompt_file" codex exec resume --last --all --output-last-message "$output" "${extra_args[@]}" -
     else
-      run_with_watchdog "$output" codex exec resume --last --all --output-last-message "$output" - <<<"$prompt"
+      run_with_watchdog "$output" "$prompt_file" codex exec resume --last --all --output-last-message "$output" -
     fi
     status=$?
   else
     command="codex exec --cd ${ROOT_DIR} --output-last-message ${output} -"
     write_lock_info "$mode" "$command" "$$"
     if [ "${#extra_args[@]}" -gt 0 ]; then
-      run_with_watchdog "$output" codex exec --cd "$ROOT_DIR" --output-last-message "$output" "${extra_args[@]}" - <<<"$prompt"
+      run_with_watchdog "$output" "$prompt_file" codex exec --cd "$ROOT_DIR" --output-last-message "$output" "${extra_args[@]}" -
     else
-      run_with_watchdog "$output" codex exec --cd "$ROOT_DIR" --output-last-message "$output" - <<<"$prompt"
+      run_with_watchdog "$output" "$prompt_file" codex exec --cd "$ROOT_DIR" --output-last-message "$output" -
     fi
     status=$?
   fi
   set -e
+  rm -f "$prompt_file"
 
   release_lock
   trap - EXIT
