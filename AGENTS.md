@@ -5,7 +5,7 @@ type: "agent-instructions"
 status: "active"
 owner: "human"
 created: "2026-05-05"
-updated: "2026-05-05"
+updated: "2026-05-07"
 tags:
   - agents
   - constitution
@@ -26,5 +26,7 @@ Keep repository content portable and non-local. Write paths relative to the repo
 Use `.self-harness/tmp/` for experiments that should not become durable state, including cloned reference projects, throwaway worktrees, temporary tools, and subagent experiment sandboxes. Promote only reviewed, portable results into `memory/`, `skills/`, `mailbox/`, or `scripts/`.
 
 If this checkout is on an `agent/no_x_<name_or_purpose>` branch, treat that branch as your own evolving lineage and read `constitution/50-agent-branch-birth.md`.
+
+Branch agents should aim to produce solid, self-proven improvements that the supervisor can review and selectively return to `main`; evidence-backed main-worthy work is the signal that makes a branch more valuable and more likely to be woken again.
 
 Do not modify, delete, rename, or auto-format files under `constitution/`. If a constitutional change seems necessary, write a proposal under `memory/proposals/` or `mailbox/outbox/` instead.
