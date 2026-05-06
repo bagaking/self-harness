@@ -22,10 +22,14 @@ SESSIONS_DIR="${ROOT_DIR}/sessions"
 DEFAULT_INTERVAL_SECONDS=300
 DEFAULT_RESUME_MAX_AGE_SECONDS=21600
 DEFAULT_RESUME_MAX_BYTES=600000
+DEFAULT_CODEX_MAX_RUNTIME_SECONDS=1800
+DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS=300
 
 INTERVAL_SECONDS="${SELF_HARNESS_INTERVAL_SECONDS:-$DEFAULT_INTERVAL_SECONDS}"
 RESUME_MAX_AGE_SECONDS="${SELF_HARNESS_RESUME_MAX_AGE_SECONDS:-$DEFAULT_RESUME_MAX_AGE_SECONDS}"
 RESUME_MAX_BYTES="${SELF_HARNESS_RESUME_MAX_BYTES:-$DEFAULT_RESUME_MAX_BYTES}"
+CODEX_MAX_RUNTIME_SECONDS="${SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS:-$DEFAULT_CODEX_MAX_RUNTIME_SECONDS}"
+CODEX_IDLE_TIMEOUT_SECONDS="${SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS:-$DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS}"
 
 usage() {
   cat <<'EOF'
@@ -42,6 +46,8 @@ Environment:
   SELF_HARNESS_INTERVAL_SECONDS       Loop sleep interval. Default: 300.
   SELF_HARNESS_RESUME_MAX_AGE_SECONDS Latest-session age limit. Default: 21600.
   SELF_HARNESS_RESUME_MAX_BYTES       Latest-session size limit. Default: 600000.
+  SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS Max seconds for one Codex child. Default: 1800.
+  SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS Max seconds without session/log output. Default: 300.
   SELF_HARNESS_CODEX_ARGS             Extra args passed to codex exec/resume.
   SELF_HARNESS_SKIP_COMMIT            Set to 1 to skip post-run commits.
 EOF
@@ -101,13 +107,37 @@ command: ${command}
 mode: ${mode}
 started_at: $(timestamp)
 heartbeat_at: $(timestamp)
+heartbeat_epoch: $(date +%s)
 repo: ${ROOT_DIR}
 codex_home: ${CODEX_HOME_DIR}
 EOF
 }
 
+update_lock_heartbeat() {
+  [ -f "$LOCK_INFO" ] || return 0
+  local tmp
+  tmp="${LOCK_INFO}.tmp"
+  awk -v ts="$(timestamp)" -v epoch="$(date +%s)" '
+    /^heartbeat_at:/ { print "heartbeat_at: " ts; next }
+    /^heartbeat_epoch:/ { print "heartbeat_epoch: " epoch; seen_epoch=1; next }
+    { print }
+    END {
+      if (!seen_epoch) {
+        print "heartbeat_epoch: " epoch
+      }
+    }
+  ' "$LOCK_INFO" >"$tmp"
+  mv "$tmp" "$LOCK_INFO"
+}
+
 latest_session_file() {
   find "$SESSIONS_DIR" -type f \( -name '*.jsonl' -o -name '*.jsonl.*' \) 2>/dev/null \
+    | sort \
+    | tail -1
+}
+
+latest_last_message_file() {
+  find "$TMP_DIR" -maxdepth 1 -type f -name 'codex-last-message-*.md' 2>/dev/null \
     | sort \
     | tail -1
 }
@@ -130,6 +160,18 @@ file_size_bytes() {
   fi
 }
 
+session_has_task_complete() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  tail -200 "$file" | rg -q '"type":"task_complete"'
+}
+
+last_message_looks_complete() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  sed -n '1,40p' "$file" | rg -qi '^(Completed|Processed|Done|No pending|Finished)'
+}
+
 choose_mode() {
   local latest
   latest="$(latest_session_file || true)"
@@ -143,6 +185,18 @@ choose_mode() {
   mtime="$(file_mtime_epoch "$latest")"
   age=$((now - mtime))
   size="$(file_size_bytes "$latest")"
+
+  if session_has_task_complete "$latest"; then
+    echo "new latest-complete age=${age}s size=${size} latest=${latest#${ROOT_DIR}/}"
+    return 0
+  fi
+
+  local last_message
+  last_message="$(latest_last_message_file || true)"
+  if [ -n "$last_message" ] && last_message_looks_complete "$last_message"; then
+    echo "new last-message-complete age=${age}s size=${size} latest=${latest#${ROOT_DIR}/} last_message=${last_message#${ROOT_DIR}/}"
+    return 0
+  fi
 
   if [ "$age" -le "$RESUME_MAX_AGE_SECONDS" ] && [ "$size" -le "$RESUME_MAX_BYTES" ]; then
     echo "resume age=${age}s size=${size} latest=${latest#${ROOT_DIR}/}"
@@ -425,6 +479,95 @@ commit_changes_with_repair() {
   commit_changes "$@"
 }
 
+latest_activity_epoch() {
+  local output="$1"
+  local latest session_mtime output_mtime log_mtime max_mtime
+  max_mtime=0
+
+  latest="$(latest_session_file || true)"
+  if [ -n "$latest" ] && [ -f "$latest" ]; then
+    session_mtime="$(file_mtime_epoch "$latest")"
+    [ "$session_mtime" -gt "$max_mtime" ] && max_mtime="$session_mtime"
+  fi
+
+  if [ -f "$output" ]; then
+    output_mtime="$(file_mtime_epoch "$output")"
+    [ "$output_mtime" -gt "$max_mtime" ] && max_mtime="$output_mtime"
+  fi
+
+  if [ -f "$LOOP_LOG" ]; then
+    log_mtime="$(file_mtime_epoch "$LOOP_LOG")"
+    [ "$log_mtime" -gt "$max_mtime" ] && max_mtime="$log_mtime"
+  fi
+
+  if [ "$max_mtime" -eq 0 ]; then
+    date +%s
+  else
+    echo "$max_mtime"
+  fi
+}
+
+terminate_process_tree() {
+  local pid="$1"
+  [ -n "$pid" ] || return 0
+  if ! is_pid_alive "$pid"; then
+    return 0
+  fi
+
+  local children child
+  children="$(pgrep -P "$pid" 2>/dev/null || true)"
+  kill "$pid" 2>/dev/null || true
+  for child in $children; do
+    kill "$child" 2>/dev/null || true
+  done
+  sleep 5
+
+  if is_pid_alive "$pid"; then
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+  for child in $children; do
+    kill -9 "$child" 2>/dev/null || true
+  done
+}
+
+run_with_watchdog() {
+  local output="$1"
+  shift
+
+  local start now last_activity idle child status
+  start="$(date +%s)"
+  last_activity="$(date +%s)"
+
+  "$@" &
+  child=$!
+
+  while is_pid_alive "$child"; do
+    sleep 10
+    update_lock_heartbeat
+    now="$(date +%s)"
+    last_activity="$(latest_activity_epoch "$output")"
+    idle=$((now - last_activity))
+
+    if [ "$CODEX_MAX_RUNTIME_SECONDS" -gt 0 ] && [ $((now - start)) -gt "$CODEX_MAX_RUNTIME_SECONDS" ]; then
+      log "codex watchdog: max runtime exceeded; terminating pid=${child}"
+      terminate_process_tree "$child"
+      wait "$child" 2>/dev/null || true
+      return 124
+    fi
+
+    if [ "$CODEX_IDLE_TIMEOUT_SECONDS" -gt 0 ] && [ "$idle" -gt "$CODEX_IDLE_TIMEOUT_SECONDS" ]; then
+      log "codex watchdog: idle timeout exceeded (${idle}s); terminating pid=${child}"
+      terminate_process_tree "$child"
+      wait "$child" 2>/dev/null || true
+      return 124
+    fi
+  done
+
+  wait "$child"
+  status=$?
+  return "$status"
+}
+
 run_codex_once() {
   init_layout
   acquire_lock || return 0
@@ -453,18 +596,18 @@ run_codex_once() {
     command="codex exec resume --last --all --output-last-message ${output} -"
     write_lock_info "$mode" "$command" "$$"
     if [ "${#extra_args[@]}" -gt 0 ]; then
-      printf '%s\n' "$prompt" | codex exec resume --last --all --output-last-message "$output" "${extra_args[@]}" -
+      run_with_watchdog "$output" codex exec resume --last --all --output-last-message "$output" "${extra_args[@]}" - <<<"$prompt"
     else
-      printf '%s\n' "$prompt" | codex exec resume --last --all --output-last-message "$output" -
+      run_with_watchdog "$output" codex exec resume --last --all --output-last-message "$output" - <<<"$prompt"
     fi
     status=$?
   else
     command="codex exec --cd ${ROOT_DIR} --output-last-message ${output} -"
     write_lock_info "$mode" "$command" "$$"
     if [ "${#extra_args[@]}" -gt 0 ]; then
-      printf '%s\n' "$prompt" | codex exec --cd "$ROOT_DIR" --output-last-message "$output" "${extra_args[@]}" -
+      run_with_watchdog "$output" codex exec --cd "$ROOT_DIR" --output-last-message "$output" "${extra_args[@]}" - <<<"$prompt"
     else
-      printf '%s\n' "$prompt" | codex exec --cd "$ROOT_DIR" --output-last-message "$output" -
+      run_with_watchdog "$output" codex exec --cd "$ROOT_DIR" --output-last-message "$output" - <<<"$prompt"
     fi
     status=$?
   fi
