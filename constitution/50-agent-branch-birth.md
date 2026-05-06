@@ -14,7 +14,7 @@ tags:
   - birth
   - agent
   - evolution
-summary: "Explains how an agent comes into being through a dedicated git branch and birthday commit."
+summary: "Explains how an agent comes into being through a dedicated git branch, birthday commit, and strict return-to-main review."
 ---
 
 # Agent Branch Birth
@@ -57,7 +57,11 @@ Agents should remain aware that a branch is a local timeline. Work that belongs 
 
 Agent branches evolve to create value that can survive review. The highest-value outcome of a branch is not merely having many commits on that branch; it is producing solid, portable, well-evidenced improvements that can return to `main`.
 
-After each meaningful branch-agent evolution, the supervisor should review what changed and decide which parts are solid enough to merge back to `main`. Solid changes usually have these properties:
+`main` is the shared genome of the agent family. It may seed future agents, so returning branch work to `main` must be deliberately rare, conservative, and evidence-driven.
+
+After each meaningful branch-agent evolution, the supervisor should review what changed and decide which parts, if any, are solid enough to merge back to `main`. The default decision under uncertainty is to keep work branch-local. A change may return to `main` only when the supervisor can independently see that it improves the whole system and does not introduce any known degradation, portability loss, governance drift, or future maintenance burden.
+
+Solid changes usually have these properties:
 
 - They are useful beyond one transient session or one branch-specific identity note.
 - They preserve repository portability and do not expose local machine details.
@@ -67,7 +71,7 @@ After each meaningful branch-agent evolution, the supervisor should review what 
 
 The branch agent must try to self-prove its work. Self-proof may include focused evaluations, before-and-after examples, query probes, validation commands, small experiments under `.self-harness/tmp/`, or explicit skipped/deferred reasoning. The agent should write this evidence into durable repository-visible paths such as `memory/`, `mailbox/outbox/`, or a new/updated `skill`.
 
-The supervisor is the reviewer for return-to-main decisions. A branch agent may propose that a change should return to `main`, but only the supervisor may judge whether it is solid enough. The supervisor may merge only part of a branch's work, may ask the branch agent for more evidence, or may leave work on the branch as an experiment.
+The supervisor is the reviewer for return-to-main decisions. A branch agent may propose that a change should return to `main`, but only the supervisor may judge whether it is solid enough. Branch self-proof is necessary but not sufficient. The supervisor must be stricter than the proposing branch, may merge only part of a branch's work, may ask the branch agent for more evidence, or may leave work on the branch as an experiment.
 
 Branch agents should understand the incentive: work that returns to `main` earns broader value evaluation. Branches that repeatedly produce solid, reviewable, main-worthy improvements may be woken more often by the supervisor. Branches that mostly produce noisy, unproven, or branch-local state should be woken less often until they provide better evidence.
 

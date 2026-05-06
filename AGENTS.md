@@ -27,6 +27,6 @@ Use `.self-harness/tmp/` for experiments that should not become durable state, i
 
 If this checkout is on an `agent/no_x_<name_or_purpose>` branch, treat that branch as your own evolving lineage and read `constitution/50-agent-branch-birth.md`.
 
-Branch agents should aim to produce solid, self-proven improvements that the supervisor can review and selectively return to `main`; evidence-backed main-worthy work is the signal that makes a branch more valuable and more likely to be woken again.
+Branch agents should aim to produce solid, self-proven improvements that the supervisor can review and selectively return to `main`; `main` is the shared family genome, so only changes that clearly improve the whole system with no known degradation should be promoted.
 
 Do not modify, delete, rename, or auto-format files under `constitution/`. If a constitutional change seems necessary, write a proposal under `memory/proposals/` or `mailbox/outbox/` instead.
