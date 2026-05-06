@@ -2,7 +2,7 @@
 title: "Supervisor Main Gene Pool Review"
 id: "mailbox-inbox-2026-05-07-supervisor-main-gene-pool-review"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
