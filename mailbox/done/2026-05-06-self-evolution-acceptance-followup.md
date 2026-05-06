@@ -2,7 +2,7 @@
 id: "mailbox-inbox-2026-05-06-self-evolution-acceptance-followup"
 title: "Self Evolution Acceptance Followup"
 type: "mailbox-message"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-06"
 updated: "2026-05-06"

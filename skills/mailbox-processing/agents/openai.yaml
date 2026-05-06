@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mailbox Processing"
+  short_description: "Process repository mailbox messages safely"
+  default_prompt: "Use $mailbox-processing to process the pending self-harness mailbox messages."
