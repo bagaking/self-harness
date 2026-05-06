@@ -1,0 +1,4 @@
+interface:
+  display_name: "Branch Evolution Evaluation"
+  short_description: "Evaluate branch-agent changes for return-to-main review"
+  default_prompt: "Use $branch-evolution-evaluation to evaluate branch-agent changes and identify return-to-main candidates."
