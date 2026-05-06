@@ -235,6 +235,77 @@ latest_diary_file() {
     | tail -1
 }
 
+latest_staged_diary_file() {
+  git -C "$ROOT_DIR" diff --cached --name-only --diff-filter=AM \
+    | awk '/^memory\/diary\/.*\.md$/ { print }' \
+    | sort \
+    | tail -1
+}
+
+frontmatter_scalar() {
+  local key="$1"
+  local file="$2"
+  awk -v key="$key" '
+    NR == 1 {
+      if ($0 != "---") {
+        exit
+      }
+      in_frontmatter = 1
+      next
+    }
+    in_frontmatter && $0 == "---" {
+      exit
+    }
+    in_frontmatter && index($0, key ":") == 1 {
+      value = substr($0, length(key) + 2)
+      sub(/^[[:space:]]+/, "", value)
+      if (value ~ /^".*"$/) {
+        sub(/^"/, "", value)
+        sub(/"$/, "", value)
+      }
+      print value
+      exit
+    }
+  ' "$file"
+}
+
+sanitize_commit_line() {
+  tr '\n' ' ' \
+    | sed -E 's/[[:space:]]+/ /g; s/^[[:space:]]+//; s/[[:space:]]+$//' \
+    | cut -c 1-72
+}
+
+write_default_commit_message_file() {
+  local diary rel_diary title summary subject message_file
+  rel_diary="$(latest_staged_diary_file || true)"
+  if [ -n "$rel_diary" ]; then
+    diary="${ROOT_DIR}/${rel_diary}"
+    title="$(frontmatter_scalar title "$diary" | sanitize_commit_line)"
+    summary="$(frontmatter_scalar summary "$diary" | sanitize_commit_line)"
+  fi
+
+  if [ -n "${title:-}" ]; then
+    subject="run: ${title}"
+  else
+    subject="run: record self-harness state"
+  fi
+
+  message_file="${TMP_DIR}/commit-message-$(date -u +%Y%m%dT%H%M%SZ).txt"
+  {
+    printf '%s\n\n' "$subject"
+    if [ -n "${summary:-}" ]; then
+      printf '%s\n\n' "$summary"
+    fi
+    if [ -n "${rel_diary:-}" ]; then
+      printf 'Diary: %s\n\n' "$rel_diary"
+    fi
+    printf 'Changed files:\n'
+    git -C "$ROOT_DIR" diff --cached --name-only | sed 's/^/- /'
+  } >"$message_file"
+
+  echo "$message_file"
+}
+
 has_git_changes() {
   [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=all)" ]
 }
@@ -394,12 +465,8 @@ commit_changes() {
   elif [ -n "$message" ]; then
     git -C "$ROOT_DIR" commit -m "$message"
   else
-    message_file="$(latest_diary_file || true)"
-    if [ -n "$message_file" ]; then
-      git -C "$ROOT_DIR" commit -F "$message_file"
-    else
-      git -C "$ROOT_DIR" commit -m "run: record self-harness state"
-    fi
+    message_file="$(write_default_commit_message_file)"
+    git -C "$ROOT_DIR" commit -F "$message_file"
   fi
 }
 
