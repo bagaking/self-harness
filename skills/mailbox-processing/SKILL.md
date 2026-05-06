@@ -1,6 +1,6 @@
 ---
 name: mailbox-processing
-description: Use when processing self-harness mailbox work in this repository: reading pending mailbox/inbox messages, claiming them through mailbox/processing, writing durable mailbox/outbox replies or reports, moving inputs to mailbox/done or mailbox/failed, and verifying no unfinished processing files remain.
+description: "Use when processing self-harness mailbox work in this repository: reading pending mailbox/inbox messages, claiming them through mailbox/processing, writing durable mailbox/outbox replies or reports, moving inputs to mailbox/done or mailbox/failed, and verifying no unfinished processing files remain."
 ---
 
 # Mailbox Processing
