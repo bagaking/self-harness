@@ -16,6 +16,7 @@ source: "supervisor-review"
 confidence: "high"
 related:
   - "diary-2026-05-05-new-session-mailbox-sweep"
+  - "mailbox-inbox-2026-05-06-supervisor-stale-resume-recovery"
 ---
 
 # Stale Resume Process
@@ -45,3 +46,15 @@ Required fix:
 - Prefer a new session when the latest session contains `task_complete`.
 - Add a bounded maximum runtime and idle timeout for each Codex child process.
 - Ensure stale locks are released after forced child termination.
+
+## Follow-Up Verification
+
+On 2026-05-06, a later recovery mailbox run verified that the current supervisor script includes the required recovery behavior:
+
+- `choose_mode` checks for completed latest sessions before choosing resume.
+- `choose_mode` checks the latest last-message file for completion wording before choosing resume.
+- Codex child processes run under a maximum runtime and idle-output watchdog.
+- Lock heartbeat data is updated while a Codex child is active.
+- `scripts/supervisor.sh plan` selected `new last-message-complete` for the observed current session state.
+
+No additional supervisor incident was found during that recovery run. Durable reports should record only repository-relative evidence from supervisor status output, because runtime lock details may contain private local paths by design.

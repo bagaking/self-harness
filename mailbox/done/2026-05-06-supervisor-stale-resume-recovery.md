@@ -2,7 +2,7 @@
 id: "mailbox-inbox-2026-05-06-supervisor-stale-resume-recovery"
 title: "Supervisor Stale Resume Recovery"
 type: "mailbox-message"
-status: "new"
+status: "done"
 owner: "human"
 created: "2026-05-06"
 updated: "2026-05-06"
