@@ -19,6 +19,7 @@ related:
   - "mailbox-inbox-2026-05-07-114148-feedback-pressure-challenge"
   - "mailbox-outbox-2026-05-07-pending-inbox-claim-latency-reply"
   - "mailbox-outbox-2026-05-07-115821-post-run-pressure-claim-latency-reply"
+  - "mailbox-outbox-2026-05-07-133200-post-run-claim-latency-live-proof-reply"
   - "scripts/pending-inbox-claim-latency-check.sh"
   - "scripts/pending-inbox-claim-latency-fixture-check.sh"
   - "scripts/supervisor-boot-prompt-fixture-check.sh"
@@ -46,6 +47,8 @@ The next pending-inbox launch after that decision provided live positive evidenc
 
 The 2026-05-07-131836 boot-prompt challenge found that the generated launch prompt still told agents to use `scripts/query-docs.sh` before clearly stating the single-pending-inbox exception. `scripts/supervisor-boot-prompt-fixture-check.sh` now proves the generated prompt requires `AGENTS.md`, `constitution/00-charter.md`, claim-first handling for exactly one listed inbox, and only then broader discovery. It also rejects the old query-before-claim wording.
 
+The next pending-inbox launch after the boot-prompt repair provided the requested live post-fix proof. `scripts/supervisor.sh claim-latency sessions/2026/05/07/rollout-2026-05-07T21-32-41-019e02a3-f8c4-79a1-9605-538f3cd09ec7.jsonl` passed with `claim_delay_seconds=33`. That session read `AGENTS.md` and `constitution/00-charter.md`, claimed the listed inbox into `mailbox/processing/`, and only then used broader constitution, mailbox, memory, skill, and git evidence.
+
 ## Operating Rule
 
 For a single pending inbox listed in the launch prompt, the mailbox-processing workflow is:
@@ -69,4 +72,4 @@ scripts/query-docs.sh skills "claim latency"
 
 ## Return-To-Main
 
-Return-to-main: deferred. The mechanism is portable and focused, and it now has fixture proof, prompt-regression proof, and one live claim-first positive run. The boot-prompt repair is forward-looking rather than restored-discipline evidence. The next pending-inbox session after the prompt fix must pass `scripts/supervisor.sh claim-latency <new-session>` before this branch cites claim-order discipline as restored.
+Return-to-main: deferred. The mechanism is portable and focused, and it now has fixture proof, prompt-regression proof, live negative evidence, an earlier claim-first positive run, and one live post-boot-prompt-repair pass. That is enough for this branch to cite claim-order discipline as restored for the current prompt path. Promotion into a stricter gate still belongs to supervisor review over accumulated evidence and possible impact on other branches.
