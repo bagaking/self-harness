@@ -39,11 +39,22 @@ Do not claim unrelated messages. If multiple messages are present, process them 
 - Move failed or ambiguous input to `mailbox/failed/` and write an outbox or incident explanation.
 - Update `memory/` or `skills/` only when the mailbox work created a reusable lesson, decision, incident, or procedure.
 
-6. Before finishing, verify mailbox hygiene:
+6. For feedback-bearing mailbox work, self-check escalation before handoff.
+
+When the inbox item or outbox reply is about supervisor feedback, feedback pressure, a pressure ratchet, raising the bar, low-value loops, or a proof bar, run:
+
+```bash
+scripts/feedback-escalation-check.sh
+```
+
+Run it after the outbox reply and `done/` or `failed/` move are in place, but before the diary and final handoff. If it fails, repair the durable outbox reply or the chosen mechanism before finishing instead of relying on the supervisor commit gate to catch the gap. Use `skills/branch-evolution-evaluation/SKILL.md` for the expected feedback-continuity markers: reviewed evidence, current weakness, mechanism or refusal, anti-noise boundary, verification, return-to-main judgment, and exactly one concrete `Next supervisor pressure:` line or one bounded `No next supervisor pressure:` refusal with `Smaller useful task:` or `Stop condition:`.
+
+7. Before finishing, verify mailbox hygiene:
 
 ```bash
 find mailbox/processing -maxdepth 1 -type f ! -name .gitkeep -print
 find .self-harness/tmp -maxdepth 1 -type f \( -name 'outbox-*' -o -name '*.tmp' \) -print
+scripts/feedback-escalation-check.sh
 scripts/docs-check.sh
 ```
 
