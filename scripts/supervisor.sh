@@ -110,6 +110,7 @@ Usage:
   scripts/supervisor.sh loop
   scripts/supervisor.sh feedback [-F FILE] [--] FEEDBACK...
   scripts/supervisor.sh triggers [--limit N] [--evidence-limit N] [--status all|review|quiet]
+  scripts/supervisor.sh claim-latency [--max-seconds N] [SESSION...]
   scripts/supervisor.sh commit [--allow-constitution] [-m MESSAGE | -F FILE] [-- PATH...]
   scripts/supervisor.sh start
   scripts/supervisor.sh stop
@@ -574,6 +575,11 @@ create_feedback_pressure_challenge() {
 list_supervisor_evaluation_triggers() {
   init_layout
   "${ROOT_DIR}/scripts/supervisor-evaluation-trigger-list.sh" "$@"
+}
+
+check_pending_inbox_claim_latency() {
+  init_layout
+  "${ROOT_DIR}/scripts/pending-inbox-claim-latency-check.sh" "$@"
 }
 
 changed_outbox_files_with_next_pressure_marker() {
@@ -1832,6 +1838,10 @@ case "${1:-}" in
   triggers)
     shift
     list_supervisor_evaluation_triggers "$@"
+    ;;
+  claim-latency)
+    shift
+    check_pending_inbox_claim_latency "$@"
     ;;
   start)
     start_background

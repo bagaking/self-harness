@@ -9,20 +9,22 @@ Use this skill for autonomous runs or explicit requests that involve `mailbox/`.
 
 ## Workflow
 
-1. Read `AGENTS.md`, `constitution/00-charter.md`, and query relevant constitution docs before changing state:
+1. Read `AGENTS.md` and `constitution/00-charter.md` before changing state. If the launch prompt lists a single pending inbox, claim that file immediately after the charter read and before broad discovery such as extra `scripts/query-docs.sh` calls, repository sweeps, commit history review, or unrelated memory/skill inspection.
+
+After the claim, query the relevant constitution docs:
 
 ```bash
 scripts/query-docs.sh constitution mailbox
 scripts/query-docs.sh constitution commit
 ```
 
-2. Inspect mailbox state:
+2. Inspect mailbox state when needed:
 
 ```bash
 find mailbox/inbox mailbox/processing mailbox/done mailbox/outbox mailbox/failed -maxdepth 1 -type f | sort
 ```
 
-3. If a pending inbox file exists, claim exactly the file being handled:
+3. If a pending inbox file exists and has not already been claimed, claim exactly the file being handled:
 
 ```bash
 mv mailbox/inbox/<message>.md mailbox/processing/<message>.md
