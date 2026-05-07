@@ -201,10 +201,48 @@ check_idle_once_skips_launch() {
   log "idle once skipped launch without invoking Codex"
 }
 
+check_loop_exits_after_source_change() {
+  local sandbox log_file status
+  sandbox="${WORK_DIR}/loop-source-change"
+  log_file="${WORK_DIR}/loop-source-change.log"
+  prepare_common_sandbox "$sandbox"
+  write_fake_codex "${sandbox}/bin"
+  printf '%s\n' 'pending stable-copy loop handoff proof' >"${sandbox}/mailbox/inbox/pending-loop-handoff-proof.md"
+
+  set +e
+  (
+    cd "$sandbox"
+    run_with_timeout 20 env \
+      PATH="${sandbox}/bin:${PATH}" \
+      SELF_HARNESS_AUTO_CHALLENGE=0 \
+      SELF_HARNESS_SKIP_COMMIT=1 \
+      SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS=0 \
+      SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS=0 \
+      SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS=1 \
+      SELF_HARNESS_INTERVAL_SECONDS=60 \
+      bash scripts/supervisor.sh loop
+  ) >"$log_file" 2>&1
+  status=$?
+  set -e
+
+  if [ "$status" -ne 0 ]; then
+    sed -n '1,180p' "$log_file" >&2
+    fail "loop source-change handoff returned ${status}"
+  fi
+
+  if ! rg -q 'supervisor source changed during stable-copy loop; exiting' "$log_file"; then
+    sed -n '1,180p' "$log_file" >&2
+    fail "loop did not exit after the checked-out supervisor changed"
+  fi
+
+  log "loop exited after supervisor source change for restart handoff"
+}
+
 main() {
   mkdir -p "$WORK_DIR"
   check_self_modified_once_survives
   check_idle_once_skips_launch
+  check_loop_exits_after_source_change
   log "ok"
 }
 

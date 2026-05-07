@@ -32,6 +32,9 @@ DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS=300
 DEFAULT_CODEX_WATCHDOG_POLL_SECONDS=10
 DEFAULT_AUTO_CHALLENGE=1
 
+SUPERVISOR_STABLE_COPY_ACTIVE=0
+SUPERVISOR_SOURCE_FINGERPRINT_AT_START=""
+
 INTERVAL_SECONDS="${SELF_HARNESS_INTERVAL_SECONDS:-$DEFAULT_INTERVAL_SECONDS}"
 RESUME_MAX_AGE_SECONDS="${SELF_HARNESS_RESUME_MAX_AGE_SECONDS:-$DEFAULT_RESUME_MAX_AGE_SECONDS}"
 RESUME_MAX_BYTES="${SELF_HARNESS_RESUME_MAX_BYTES:-$DEFAULT_RESUME_MAX_BYTES}"
@@ -42,7 +45,7 @@ AUTO_CHALLENGE="${SELF_HARNESS_AUTO_CHALLENGE:-$DEFAULT_AUTO_CHALLENGE}"
 
 command_needs_stable_supervisor() {
   case "${1:-}" in
-    once|loop|commit)
+    once|loop|commit|restart)
       return 0
       ;;
     *)
@@ -57,12 +60,20 @@ current_supervisor_script_path() {
   printf '%s/%s\n' "$current_dir" "$(basename "${BASH_SOURCE[0]}")"
 }
 
+file_fingerprint() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  cksum "$file" | awk '{ print $1 ":" $2 }'
+}
+
 run_from_stable_supervisor_copy_if_needed() {
   command_needs_stable_supervisor "${1:-}" || return 0
 
   local current_script
   current_script="$(current_supervisor_script_path)"
   if [ -n "${SELF_HARNESS_SUPERVISOR_STABLE_PATH:-}" ] && [ "$current_script" = "$SELF_HARNESS_SUPERVISOR_STABLE_PATH" ]; then
+    SUPERVISOR_STABLE_COPY_ACTIVE=1
+    SUPERVISOR_SOURCE_FINGERPRINT_AT_START="$(file_fingerprint "${ROOT_DIR}/scripts/supervisor.sh" || true)"
     unset SELF_HARNESS_SUPERVISOR_STABLE_PATH
     unset SELF_HARNESS_SUPERVISOR_ROOT
     return 0
@@ -95,6 +106,7 @@ Usage:
   scripts/supervisor.sh commit [--allow-constitution] [-m MESSAGE | -F FILE] [-- PATH...]
   scripts/supervisor.sh start
   scripts/supervisor.sh stop
+  scripts/supervisor.sh restart
   scripts/supervisor.sh status
 
 Environment:
@@ -624,11 +636,7 @@ run_commit_gate() {
 
   "${ROOT_DIR}/scripts/docs-check.sh"
 
-  local script
-  for script in "${ROOT_DIR}"/scripts/*.sh; do
-    [ -f "$script" ] || continue
-    bash -n "$script"
-  done
+  "${ROOT_DIR}/scripts/shell-syntax-check.sh"
 }
 
 commit_changes() {
@@ -1072,8 +1080,22 @@ run_loop() {
     if [ "$status" -ne 0 ]; then
       log "run failed with status ${status}"
     fi
+    if stable_supervisor_source_changed; then
+      log "supervisor source changed during stable-copy loop; exiting so the next start activates the checked-out script"
+      return 0
+    fi
     sleep "$INTERVAL_SECONDS"
   done
+}
+
+stable_supervisor_source_changed() {
+  [ "$SUPERVISOR_STABLE_COPY_ACTIVE" = "1" ] || return 1
+  [ -n "$SUPERVISOR_SOURCE_FINGERPRINT_AT_START" ] || return 1
+
+  local current_fingerprint
+  current_fingerprint="$(file_fingerprint "${ROOT_DIR}/scripts/supervisor.sh" || true)"
+  [ -n "$current_fingerprint" ] || return 1
+  [ "$current_fingerprint" != "$SUPERVISOR_SOURCE_FINGERPRINT_AT_START" ]
 }
 
 launchd_domain() {
@@ -1200,6 +1222,12 @@ stop_background() {
   rm -f "$PID_FILE"
 }
 
+restart_background() {
+  init_layout
+  stop_background
+  start_background
+}
+
 status() {
   init_layout
   if launchd_is_loaded; then
@@ -1240,6 +1268,9 @@ case "${1:-}" in
     ;;
   stop)
     stop_background
+    ;;
+  restart)
+    restart_background
     ;;
   status)
     status

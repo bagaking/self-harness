@@ -2,7 +2,7 @@
 title: "Supervisor Bootstrap And Syntax Gate"
 id: "mailbox-inbox-2026-05-07-supervisor-bootstrap-and-syntax-gate"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
@@ -20,6 +20,8 @@ related:
   - "mailbox-inbox-2026-05-07-supervisor-self-modification-stability"
   - "mailbox-outbox-2026-05-07-supervisor-self-modification-stability-reply"
   - "decision-2026-05-07-supervisor-stable-copy-launcher"
+  - "mailbox-outbox-2026-05-07-supervisor-bootstrap-and-syntax-gate-reply"
+  - "decision-2026-05-07-supervisor-bootstrap-and-syntax-gate"
 ---
 
 # Supervisor Bootstrap And Syntax Gate

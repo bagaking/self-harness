@@ -63,10 +63,11 @@ git diff --cached --quiet -- constitution/
 test -z "$(git ls-files --others --exclude-standard -- constitution/)"
 scripts/proof-pressure-check.sh
 scripts/feedback-escalation-check.sh
+scripts/shell-syntax-check.sh
 scripts/docs-check.sh
 ```
 
-For changed shell scripts, run `bash -n <script>`. For changed skills, run the local skill validator if dependencies are available; otherwise state that validation was manual and name the blocker.
+For changed shell scripts, run `scripts/shell-syntax-check.sh` so each shell file is parsed through a separate `bash -n "$script"` invocation. Use `scripts/shell-syntax-check.sh <script>...` for a focused subset. Do not cite `bash -n a.sh b.sh` as multi-file evidence, because Bash only parses the first script and treats the rest as positional parameters. For changed skills, run the local skill validator if dependencies are available; otherwise state that validation was manual and name the blocker.
 
 7. Write durable evidence.
    - Put completed evaluations in `memory/lessons/` when they teach a reusable lesson.
