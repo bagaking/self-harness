@@ -19,6 +19,7 @@ no_next_pressure_noise_pattern='(further escalation would be noisy|would be nois
 no_next_pressure_bounded_pattern='^(Smaller useful task|Stop condition):[[:space:]]*[^[:space:]].*[[:alnum:]]'
 supervisor_evaluation_trigger_pattern='^Supervisor evaluation trigger:[[:space:]]*[^[:space:]].*[[:alnum:]]'
 generic_supervisor_evaluation_trigger_pattern='^Supervisor evaluation trigger:[[:space:]]*(continue|keep evaluating|raise the bar|do more|review later|watch|monitor|process mailbox|inspect repository|generic|same as above|none)([[:space:][:punct:]]|$)'
+trigger_review_pattern='scripts/(supervisor\.sh[[:space:]]+triggers|supervisor-evaluation-trigger-list\.sh)([^[:cntrl:]]*)--status[[:space:]]+review'
 
 changed_files() {
   {
@@ -120,7 +121,8 @@ document_has_no_next_pressure_refusal() {
     return 1
   fi
   document_matches "$rel" "$no_next_pressure_noise_pattern" || return 1
-  document_matches "$rel" "$no_next_pressure_bounded_pattern"
+  document_matches "$rel" "$no_next_pressure_bounded_pattern" || return 1
+  document_matches "$rel" "$trigger_review_pattern"
 }
 
 require_feedback_continuity_marker() {
@@ -142,7 +144,7 @@ require_feedback_continuity_marker() {
     fi
 
     echo "feedback-escalation-check: missing feedback continuity marker in ${rel}" >&2
-    echo "feedback-escalation-check: add exactly one concrete 'Next supervisor pressure:' line, or exactly one 'No next supervisor pressure:' refusal with a noisy-escalation reason plus a concrete 'Supervisor evaluation trigger:' and 'Smaller useful task:' or 'Stop condition:'" >&2
+    echo "feedback-escalation-check: add exactly one concrete 'Next supervisor pressure:' line, or exactly one 'No next supervisor pressure:' refusal with a noisy-escalation reason, a concrete 'Supervisor evaluation trigger:', 'Smaller useful task:' or 'Stop condition:', and a trigger-backed refusal review command such as 'scripts/supervisor.sh triggers --status review'" >&2
     errors=$((errors + 1))
   done
 

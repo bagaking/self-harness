@@ -12,13 +12,14 @@ tags:
   - escalation
   - commit-gate
   - branch-evolution
-summary: "Records a branch-local executable check that makes feedback-bearing mailbox work prove its escalation and continuity boundary, including trigger-backed refusal paths."
+summary: "Records a branch-local executable check that makes feedback-bearing mailbox work prove its escalation and continuity boundary, including reviewed trigger-backed refusal paths."
 source: "mailbox"
 confidence: "high"
 related:
   - "mailbox-inbox-2026-05-07-feedback-escalation-loop"
   - "decision-2026-05-07-feedback-pressure-ratchet"
   - "skill-branch-evolution-evaluation"
+  - "mailbox-inbox-2026-05-07-134325-feedback-pressure-challenge"
 ---
 
 # Feedback Escalation Check
@@ -50,11 +51,13 @@ It also requires a changed durable mechanism under `scripts/`, `skills/`, or mem
 The feedback-continuity path must be one of:
 
 - one concrete `Next supervisor pressure:` line that the supervisor can turn into the next inbox;
-- one `No next supervisor pressure:` refusal that explains why further escalation would be noisy and includes one concrete `Supervisor evaluation trigger:` plus either `Smaller useful task:` or `Stop condition:`.
+- one `No next supervisor pressure:` refusal that explains why further escalation would be noisy and includes one concrete `Supervisor evaluation trigger:`, either `Smaller useful task:` or `Stop condition:`, and a rerunnable trigger-backed refusal review command such as `scripts/supervisor.sh triggers --status review`.
 
 Generic next-pressure lines such as `raise the bar`, `improve`, `sweep`, or `inspect repository` are rejected. A report should not include both continuity paths.
 
 The refusal trigger matters because a local anti-noise boundary is not permission for the supervisor loop to stop evaluating. A refusal must name the future signal that would make more pressure useful again, such as a failing gate, a changed supervisor path, a repeated missed claim, or a concrete evaluation warning tied to real task loss.
+
+Fresh human feedback on 2026-05-07 showed a second refusal-path gap after `e45dd74`: a feedback-bearing run could write a compliant `No next supervisor pressure:` reply while never surfacing the trigger-backed refusal review queue that is supposed to keep those refusals operational. The gate now requires the refusal path itself to cite `scripts/supervisor.sh triggers --status review` or `scripts/supervisor-evaluation-trigger-list.sh --status review`, so a local anti-noise boundary has to leave a worked supervisor review signal in the same report.
 
 ## Anti-Noise Rule
 
@@ -82,7 +85,8 @@ Continuity fixtures used during the 2026-05-07 pressure run:
 - negative fixture: a changed feedback outbox with all old required sections but no next-pressure marker and no refusal failed with `missing feedback continuity marker`;
 - marker-positive fixture: the same report plus one concrete `Next supervisor pressure:` line passed;
 - old-refusal negative fixture: the same report plus one `No next supervisor pressure:` line and `Smaller useful task:` but no `Supervisor evaluation trigger:` failed;
-- refusal-positive fixture: the same report plus one `No next supervisor pressure:` line, one concrete `Supervisor evaluation trigger:`, and `Smaller useful task:` passed.
+- trigger-backed-without-review negative fixture: the same report plus one `No next supervisor pressure:` line, one concrete `Supervisor evaluation trigger:`, and `Stop condition:` failed when it did not include a trigger-review command;
+- reviewed-refusal-positive fixture: the same report plus one `No next supervisor pressure:` line, one concrete `Supervisor evaluation trigger:`, `Stop condition:`, and `scripts/supervisor.sh triggers --status review` passed.
 
 ## Return-To-Main Judgment
 

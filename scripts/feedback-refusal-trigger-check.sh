@@ -182,18 +182,32 @@ check_rejects_generic_trigger() {
   log "rejects generic supervisor evaluation trigger"
 }
 
-check_allows_trigger_backed_refusal() {
+check_rejects_trigger_backed_refusal_without_review() {
   local sandbox log_file
-  sandbox="${WORK_DIR}/trigger-backed-refusal"
-  log_file="${WORK_DIR}/trigger-backed-refusal.log"
+  sandbox="${WORK_DIR}/trigger-backed-refusal-without-review"
+  log_file="${WORK_DIR}/trigger-backed-refusal-without-review.log"
   prepare_sandbox "$sandbox"
   write_feedback_outbox_base \
     "${sandbox}/mailbox/outbox/feedback-refusal-trigger-fixture.md" \
-    "Trigger Backed Refusal" \
+    "Trigger Backed Refusal Without Review" \
     $'No next supervisor pressure: further escalation would be noisy because this fixture already proved the refusal boundary.\n\nSupervisor evaluation trigger: reopen pressure if a changed feedback outbox with no next-pressure marker and no trigger-backed refusal passes this gate.\n\nStop condition: rerun when `scripts/feedback-escalation-check.sh` refusal-marker parsing changes.'
 
-  expect_success "trigger-backed refusal" "$sandbox" "$log_file"
-  log "allows trigger-backed no-next refusal"
+  expect_failure "trigger-backed refusal without review" "$sandbox" "$log_file" "missing feedback continuity marker"
+  log "rejects trigger-backed no-next refusal without review command"
+}
+
+check_allows_reviewed_trigger_backed_refusal() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/reviewed-trigger-backed-refusal"
+  log_file="${WORK_DIR}/reviewed-trigger-backed-refusal.log"
+  prepare_sandbox "$sandbox"
+  write_feedback_outbox_base \
+    "${sandbox}/mailbox/outbox/feedback-refusal-trigger-fixture.md" \
+    "Reviewed Trigger Backed Refusal" \
+    $'No next supervisor pressure: further escalation would be noisy because this fixture already proved the refusal boundary and reviewed trigger-backed refusal candidates with `scripts/supervisor.sh triggers --status review`.\n\nSupervisor evaluation trigger: reopen pressure if a changed feedback outbox with no next-pressure marker and no trigger-backed refusal passes this gate.\n\nStop condition: rerun `scripts/supervisor.sh triggers --status review` and this fixture when `scripts/feedback-escalation-check.sh` refusal-marker parsing changes.'
+
+  expect_success "reviewed trigger-backed refusal" "$sandbox" "$log_file"
+  log "allows reviewed trigger-backed no-next refusal"
 }
 
 check_allows_next_pressure_marker() {
@@ -215,7 +229,8 @@ main() {
   mkdir -p "$WORK_DIR"
   check_rejects_old_refusal_without_trigger
   check_rejects_generic_trigger
-  check_allows_trigger_backed_refusal
+  check_rejects_trigger_backed_refusal_without_review
+  check_allows_reviewed_trigger_backed_refusal
   check_allows_next_pressure_marker
   log "ok"
 }
