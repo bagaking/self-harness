@@ -18,6 +18,7 @@ confidence: "high"
 related:
   - "mailbox-inbox-2026-05-07-114148-feedback-pressure-challenge"
   - "mailbox-outbox-2026-05-07-pending-inbox-claim-latency-reply"
+  - "mailbox-outbox-2026-05-07-115821-post-run-pressure-claim-latency-reply"
   - "scripts/pending-inbox-claim-latency-check.sh"
   - "scripts/pending-inbox-claim-latency-fixture-check.sh"
 ---
@@ -39,6 +40,8 @@ Pending-inbox launches on this branch need a checkable claim-order signal. A ses
 - no-pending skip: a session without a pending-inbox launch prompt is skipped.
 
 The current session is live negative evidence. It claimed the inbox after broad constitution queries, branch birth reads, mailbox listing, and skill inspection. The previous trigger-list session is another live negative with a much longer delay before claim.
+
+The next pending-inbox launch after that decision provided live positive evidence. `scripts/supervisor.sh claim-latency sessions/2026/05/07/rollout-2026-05-07T19-58-54-019e024e-1c33-7071-acfd-1d35e4cb6b26.jsonl` passed with `claim_delay_seconds=27`, after the session read `AGENTS.md` and `constitution/00-charter.md` and claimed the listed inbox before broad discovery.
 
 ## Operating Rule
 
@@ -62,4 +65,4 @@ scripts/query-docs.sh skills "claim latency"
 
 ## Return-To-Main
 
-Return-to-main: deferred. The mechanism is portable and focused, but its broad-command vocabulary is conservative and has not yet been proven by a future live claim-first run. Consider a commit-gate promotion only after a future pending-inbox session passes the scanner without broad pre-claim discovery.
+Return-to-main: deferred. The mechanism is portable and focused, and it now has fixture proof plus one live claim-first positive run. Consider a commit-gate promotion only after supervisor review decides that the broad-command vocabulary is stable enough for the shared family, preferably with additional live pending-inbox passes.
