@@ -34,6 +34,23 @@ prepare_sandbox() {
   cp "${ROOT_DIR}/scripts/supervisor-evaluation-trigger-list.sh" "${sandbox}/scripts/"
   chmod +x "${sandbox}/scripts/supervisor-evaluation-trigger-list.sh"
 
+  cat >"${sandbox}/scripts/example-trigger.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+echo "example trigger baseline"
+SCRIPT
+
+  touch \
+    "${sandbox}/mailbox/inbox/.gitkeep" \
+    "${sandbox}/mailbox/processing/.gitkeep" \
+    "${sandbox}/mailbox/outbox/.gitkeep" \
+    "${sandbox}/mailbox/done/.gitkeep" \
+    "${sandbox}/mailbox/failed/.gitkeep"
+
+  git -C "$sandbox" init -q
+  git -C "$sandbox" checkout -q -b agent/trigger-list-check
+  git -C "$sandbox" config user.name "Self Harness Fixture"
+  git -C "$sandbox" config user.email "self-harness-fixture@example.invalid"
+
   cat >"${sandbox}/mailbox/outbox/2026-05-07-trigger-refusal.md" <<'OUTBOX'
 ---
 id: "mailbox-outbox-trigger-refusal"
@@ -62,17 +79,6 @@ Supervisor evaluation trigger: reopen pressure if `scripts/example-trigger.sh` c
 Stop condition: rerun the trigger list check when trigger discovery changes.
 OUTBOX
 
-  touch \
-    "${sandbox}/mailbox/inbox/.gitkeep" \
-    "${sandbox}/mailbox/processing/.gitkeep" \
-    "${sandbox}/mailbox/outbox/.gitkeep" \
-    "${sandbox}/mailbox/done/.gitkeep" \
-    "${sandbox}/mailbox/failed/.gitkeep"
-
-  git -C "$sandbox" init -q
-  git -C "$sandbox" checkout -q -b agent/trigger-list-check
-  git -C "$sandbox" config user.name "Self Harness Fixture"
-  git -C "$sandbox" config user.email "self-harness-fixture@example.invalid"
   git -C "$sandbox" add --all -- .
   git -C "$sandbox" commit -q -m "fixture: trigger refusal"
 }
@@ -268,6 +274,154 @@ DIARY
   log "keeps uncommitted trigger sources quiet until they have a source commit"
 }
 
+check_ignores_generic_words_from_completed_record_trigger() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/completed-record-generic"
+  log_file="${WORK_DIR}/completed-record-generic.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-07-trigger-refusal.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-trigger-refusal"
+title: "Completed Record Trigger Refusal"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-07"
+updated: "2026-05-07"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "trigger-refusal"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture completed-record trigger-backed refusal."
+related: []
+---
+
+# Completed Record Trigger Refusal
+
+No next supervisor pressure: further escalation would be noisy because the completed-record gate is already executable.
+
+Supervisor evaluation trigger: reopen pressure if `scripts/supervisor.sh completed-records` fails during a later post-run commit attempt or if a tracked `mailbox/outbox/*.md` or `memory/diary/*.md` record is modified instead of creating a unique current-run file.
+
+Stop condition: let the normal post-run commit gate enforce `scripts/completed-record-overwrite-check.sh` on the next supervisor commit attempt.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: completed record trigger"
+
+  cat >"${sandbox}/mailbox/done/2026-05-07-generic-words.md" <<'DONE'
+---
+id: "mailbox-done-generic-words"
+title: "Generic Words"
+type: "mailbox-inbox"
+status: "done"
+owner: "supervisor"
+created: "2026-05-07"
+updated: "2026-05-07"
+tags:
+  - mailbox
+summary: "Contains only generic words from a trigger sentence."
+---
+
+# Generic Words
+
+The later durable record mentions creating.
+DONE
+
+  cat >"${sandbox}/memory/diary/generic-words.md" <<'DIARY'
+---
+id: "diary-generic-words"
+title: "Generic Words"
+type: "diary"
+status: "active"
+owner: "agent"
+created: "2026-05-07"
+updated: "2026-05-07"
+tags:
+  - diary
+summary: "Contains only generic words from a trigger sentence."
+---
+
+# Generic Words
+
+The later diary mentions modified and instead, but no concrete completed-record trigger term.
+DIARY
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "generic words should not make the completed-record trigger look fired"
+  }
+  log "ignores generic words from completed-record trigger prose"
+}
+
+check_existing_file_old_term_does_not_count_after_unrelated_edit() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/old-term-unrelated-edit"
+  log_file="${WORK_DIR}/old-term-unrelated-edit.log"
+  prepare_sandbox "$sandbox"
+
+  cat >>"${sandbox}/scripts/example-trigger.sh" <<'SCRIPT'
+# Existing concrete trigger term before the refusal source commit:
+# scripts/example-trigger.sh
+SCRIPT
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: existing trigger term"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-old-term-trigger-refusal.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-old-term-trigger-refusal"
+title: "Trigger Refusal"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-07"
+updated: "2026-05-07"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "old-term-trigger-refusal"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture trigger-backed refusal."
+related: []
+---
+
+# Trigger Refusal
+
+No next supervisor pressure: further escalation would be noisy because this fixture only needs a future concrete signal.
+
+Supervisor evaluation trigger: reopen pressure if `scripts/example-trigger.sh` changes while a pending inbox remains unclaimed.
+
+Stop condition: rerun the trigger list check when trigger discovery changes.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: trigger refusal"
+
+  cat >>"${sandbox}/scripts/example-trigger.sh" <<'SCRIPT'
+echo "unrelated later edit"
+SCRIPT
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "old trigger term in an existing file should not count after an unrelated edit"
+  }
+  log "ignores old trigger terms in existing files after unrelated edits"
+}
+
 main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
@@ -276,6 +430,8 @@ main() {
   check_status_filter
   check_ignores_marker_only_later_evidence
   check_uncommitted_trigger_stays_quiet
+  check_ignores_generic_words_from_completed_record_trigger
+  check_existing_file_old_term_does_not_count_after_unrelated_edit
   log "ok"
 }
 

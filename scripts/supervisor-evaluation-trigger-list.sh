@@ -120,6 +120,9 @@ staged_or_changed_files() {
 
 is_candidate_evidence_path() {
   case "$1" in
+    scripts/supervisor-evaluation-trigger-list.sh|scripts/supervisor-evaluation-trigger-list-check.sh)
+      return 1
+      ;;
     mailbox/inbox/*.md|mailbox/processing/*.md|mailbox/done/*.md|mailbox/failed/*.md|mailbox/outbox/*.md)
       return 0
       ;;
@@ -169,36 +172,62 @@ write_trigger_needles() {
             lower_value != "supervisor evaluation trigger:" &&
             lower_value != "next supervisor pressure:" &&
             lower_value != "task_complete" &&
-            lower_value != "review-evidence") {
+            lower_value != "review-evidence" &&
+            value ~ /[.\/:_ -]/) {
           print value
         }
         text = substr(text, RSTART + RLENGTH)
-      }
-
-      gsub(/`[^`]+`/, " ", text)
-      count = split(text, parts, /[^[:alnum:]_.\/:-]+/)
-      for (i = 1; i <= count; i++) {
-        token = parts[i]
-        lower = tolower(token)
-        if (length(token) >= 7 &&
-            lower !~ /^(because|without|changed|concrete|current|evaluation|failure|feedback|further|generic|pressure|reopen|supervisor|trigger|triggers|future|passes|reason|refusal|refusals|treats)$/) {
-          print token
-        }
       }
     }
   ' | awk 'NF && !seen[tolower($0)]++ { print; count++; if (count >= 10) exit }' >"$out_file"
 }
 
+file_added_after_source() {
+  local rel="$1"
+  local source_commit="$2"
+
+  [ -n "$source_commit" ] || return 1
+
+  if git -C "$ROOT_DIR" cat-file -e "${source_commit}:${rel}" 2>/dev/null; then
+    return 1
+  fi
+
+  return 0
+}
+
+added_content_contains() {
+  local rel="$1"
+  local needle="$2"
+  local source_commit="$3"
+
+  {
+    if [ -n "$source_commit" ]; then
+      git -C "$ROOT_DIR" diff --no-ext-diff --unified=0 "${source_commit}..HEAD" -- "$rel" 2>/dev/null || true
+    fi
+    git -C "$ROOT_DIR" diff --no-ext-diff --unified=0 -- "$rel" 2>/dev/null || true
+    git -C "$ROOT_DIR" diff --cached --no-ext-diff --unified=0 -- "$rel" 2>/dev/null || true
+  } | awk '/^\+/ && $0 !~ /^\+\+\+ / { print substr($0, 2) }' | LC_ALL=C rg -Fqi -- "$needle"
+}
+
 path_or_file_contains() {
   local rel="$1"
   local needle="$2"
+  local source_commit="$3"
   [ -n "$needle" ] || return 1
 
   if printf '%s\n' "$rel" | LC_ALL=C rg -Fqi -- "$needle"; then
-    return 0
+    if file_added_after_source "$rel" "$source_commit" ||
+       ! git -C "$ROOT_DIR" ls-files --error-unmatch "$rel" >/dev/null 2>&1; then
+      return 0
+    fi
   fi
 
-  LC_ALL=C rg -Fqi -- "$needle" "${ROOT_DIR}/${rel}"
+  if ! git -C "$ROOT_DIR" ls-files --error-unmatch "$rel" >/dev/null 2>&1; then
+    LC_ALL=C rg -Fqi -- "$needle" "${ROOT_DIR}/${rel}"
+    return $?
+  fi
+
+  added_content_contains "$rel" "$needle" "$source_commit"
 }
 
 write_matching_evidence() {
@@ -215,7 +244,7 @@ write_matching_evidence() {
     [ -n "$rel" ] || continue
     terms=""
     while IFS= read -r needle; do
-      if path_or_file_contains "$rel" "$needle"; then
+      if path_or_file_contains "$rel" "$needle" "$source_commit"; then
         if [ -z "$terms" ]; then
           terms="$needle"
         else
