@@ -54,6 +54,8 @@ scripts/supervisor-real-cycle-check.sh
 
 The post-run pressure fixture creates a changed outbox report with the marker, runs `scripts/supervisor.sh once` in a disposable real git sandbox, and verifies that the supervisor commit includes a generated `mailbox/inbox/*-post-run-pressure-challenge.md`.
 
+As of the `2026-05-07-140206` feedback-pressure repair, the fixture also uses a long marker matching the prior malformed case and verifies that the generated `## Requirement` section preserves the complete line. The extractor must not split a requirement mid-word or mid-sentence merely to fit a fixed character count. If a future cap is added, it must emit an explicit ellipsis plus source pointer instead of a silent substring.
+
 ## Current Weakness
 
 The marker improves automatic pressure but does not repair invalid checked-out supervisor source after a fail-closed gate. That remains the next control-plane weakness.

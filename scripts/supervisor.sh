@@ -621,7 +621,7 @@ extract_next_pressure_requirement() {
       gsub(/[[:space:]]+/, " ", value)
       sub(/^[[:space:]]+/, "", value)
       sub(/[[:space:]]+$/, "", value)
-      print substr(value, 1, 240)
+      print value
       exit
     }
   ' "${ROOT_DIR}/${rel}"

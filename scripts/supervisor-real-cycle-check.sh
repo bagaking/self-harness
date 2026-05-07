@@ -254,7 +254,7 @@ Rerunnable verification is provided by scripts/supervisor-real-cycle-check.sh.
 
 Return-to-main is no for this scratch-only marker.
 
-Next supervisor pressure: Prove the generated post-run pressure inbox is handled instead of ending at the completed feedback-bearing reply.
+Next supervisor pressure: the next feedback-bearing run that uses \`No next supervisor pressure:\` must cite an observed \`scripts/supervisor.sh triggers --status review\` or \`scripts/supervisor-evaluation-trigger-list.sh --status review\` result before the refusal can be treated as compliant.
 OUTBOX
     ;;
 esac
@@ -420,9 +420,10 @@ check_invalid_loop_recovers_checked_out_source() {
 }
 
 check_post_run_pressure_seeding() {
-  local sandbox log_file status seeded_count seeded_file
+  local sandbox log_file status seeded_count seeded_file expected_requirement actual_requirement
   sandbox="${WORK_DIR}/post-run-pressure"
   log_file="${WORK_DIR}/post-run-pressure.log"
+  expected_requirement='the next feedback-bearing run that uses `No next supervisor pressure:` must cite an observed `scripts/supervisor.sh triggers --status review` or `scripts/supervisor-evaluation-trigger-list.sh --status review` result before the refusal can be treated as compliant.'
   prepare_sandbox "$sandbox" "pressure-real-cycle-input" "Pressure Real Cycle Input"
 
   set +e
@@ -456,10 +457,23 @@ check_post_run_pressure_seeding() {
   rg -q 'mailbox/outbox/pressure-real-cycle-reply\.md' "$seeded_file" || fail "post-run pressure inbox omitted source outbox path"
   rg -q 'Review `mailbox/outbox/pressure-real-cycle-reply\.md` before broad repository inspection\.' "$seeded_file" || fail "post-run pressure inbox omitted review source path"
   rg -q 'scratch work under `.self-harness/tmp/`' "$seeded_file" || fail "post-run pressure inbox omitted scratch path"
+  actual_requirement="$(awk '
+    /^## Requirement$/ { in_requirement = 1; next }
+    /^## Acceptance Criteria$/ { exit }
+    in_requirement && NF { print; exit }
+  ' "$seeded_file")"
+  [ "$actual_requirement" = "$expected_requirement" ] || {
+    printf 'expected requirement: %s\n' "$expected_requirement" >&2
+    printf 'actual requirement:   %s\n' "$actual_requirement" >&2
+    fail "post-run pressure inbox requirement did not preserve the complete long marker"
+  }
+  if rg -q 'before the refusal can b$' "$seeded_file"; then
+    fail "post-run pressure inbox still contains a mid-word truncated requirement"
+  fi
   git -C "$sandbox" show --name-only --format= HEAD | rg -q '^mailbox/inbox/.*post-run-pressure-challenge\.md$' || fail "post-run pressure inbox was not included in the supervisor commit"
   assert_clean_worktree "$sandbox"
 
-  log "post-run pressure marker seeded a committed next inbox before handoff"
+  log "post-run pressure marker preserved a complete long requirement in the committed next inbox"
 }
 
 main() {
