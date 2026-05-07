@@ -1081,8 +1081,11 @@ run_loop() {
       log "run failed with status ${status}"
     fi
     if stable_supervisor_source_changed; then
-      log "supervisor source changed during stable-copy loop; exiting so the next start activates the checked-out script"
-      return 0
+      if stable_supervisor_handoff_ready; then
+        log "supervisor source changed during stable-copy loop and passed readiness check; exiting so the next start activates the checked-out script"
+        return 0
+      fi
+      log "supervisor source changed during stable-copy loop but failed readiness check; keeping stable copy in control"
     fi
     sleep "$INTERVAL_SECONDS"
   done
@@ -1096,6 +1099,13 @@ stable_supervisor_source_changed() {
   current_fingerprint="$(file_fingerprint "${ROOT_DIR}/scripts/supervisor.sh" || true)"
   [ -n "$current_fingerprint" ] || return 1
   [ "$current_fingerprint" != "$SUPERVISOR_SOURCE_FINGERPRINT_AT_START" ]
+}
+
+stable_supervisor_handoff_ready() {
+  local source_script
+  source_script="${ROOT_DIR}/scripts/supervisor.sh"
+  [ -f "$source_script" ] || return 1
+  bash -n "$source_script"
 }
 
 launchd_domain() {

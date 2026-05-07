@@ -16,6 +16,7 @@ log() {
 
 write_fake_codex() {
   local dir="$1"
+  local replacement="${2:-invalid}"
   mkdir -p "$dir"
   {
     printf '%s\n' '#!/usr/bin/env bash'
@@ -35,7 +36,17 @@ write_fake_codex() {
     printf '%s\n' 'fi'
     printf '%s\n' 'printf "stable_path_present=%s\n" "${SELF_HARNESS_SUPERVISOR_STABLE_PATH:+yes}" > stable-env.txt'
     printf '%s\n' 'printf "root_present=%s\n" "${SELF_HARNESS_SUPERVISOR_ROOT:+yes}" >> stable-env.txt'
-    printf '%s\n' 'printf "%s\n" '\''printf "broken quote'\'' > scripts/supervisor.sh'
+    case "$replacement" in
+      invalid)
+        printf '%s\n' 'printf "%s\n" '\''printf "broken quote'\'' > scripts/supervisor.sh'
+        ;;
+      valid)
+        printf '%s\n' 'printf "%s\n" "#!/usr/bin/env bash" "set -euo pipefail" "echo valid replacement supervisor" > scripts/supervisor.sh'
+        ;;
+      *)
+        fail "unknown fake Codex replacement mode: ${replacement}"
+        ;;
+    esac
     printf '%s\n' 'exit 0'
   } >"${dir}/codex"
   chmod +x "${dir}/codex"
@@ -116,7 +127,7 @@ check_self_modified_once_survives() {
   sandbox="${WORK_DIR}/self-modified-once"
   log_file="${WORK_DIR}/self-modified-once.log"
   prepare_common_sandbox "$sandbox"
-  write_fake_codex "${sandbox}/bin"
+  write_fake_codex "${sandbox}/bin" invalid
   printf '%s\n' 'pending stable-copy proof' >"${sandbox}/mailbox/inbox/pending-stable-copy-proof.md"
 
   set +e
@@ -201,12 +212,12 @@ check_idle_once_skips_launch() {
   log "idle once skipped launch without invoking Codex"
 }
 
-check_loop_exits_after_source_change() {
+check_loop_handoff_with_valid_source_change() {
   local sandbox log_file status
-  sandbox="${WORK_DIR}/loop-source-change"
-  log_file="${WORK_DIR}/loop-source-change.log"
+  sandbox="${WORK_DIR}/loop-valid-source-change"
+  log_file="${WORK_DIR}/loop-valid-source-change.log"
   prepare_common_sandbox "$sandbox"
-  write_fake_codex "${sandbox}/bin"
+  write_fake_codex "${sandbox}/bin" valid
   printf '%s\n' 'pending stable-copy loop handoff proof' >"${sandbox}/mailbox/inbox/pending-loop-handoff-proof.md"
 
   set +e
@@ -227,22 +238,73 @@ check_loop_exits_after_source_change() {
 
   if [ "$status" -ne 0 ]; then
     sed -n '1,180p' "$log_file" >&2
-    fail "loop source-change handoff returned ${status}"
+    fail "valid loop source-change handoff returned ${status}"
   fi
 
-  if ! rg -q 'supervisor source changed during stable-copy loop; exiting' "$log_file"; then
+  if ! rg -q 'supervisor source changed during stable-copy loop and passed readiness check; exiting' "$log_file"; then
     sed -n '1,180p' "$log_file" >&2
-    fail "loop did not exit after the checked-out supervisor changed"
+    fail "loop did not exit after the checked-out supervisor changed to valid shell"
   fi
 
-  log "loop exited after supervisor source change for restart handoff"
+  log "loop exited after valid supervisor source change for restart handoff"
+}
+
+check_loop_blocks_invalid_source_change() {
+  local sandbox log_file status
+  sandbox="${WORK_DIR}/loop-invalid-source-change"
+  log_file="${WORK_DIR}/loop-invalid-source-change.log"
+  prepare_common_sandbox "$sandbox"
+  write_fake_codex "${sandbox}/bin" invalid
+  printf '%s\n' 'pending stable-copy invalid loop handoff proof' >"${sandbox}/mailbox/inbox/pending-loop-invalid-handoff-proof.md"
+
+  set +e
+  (
+    cd "$sandbox"
+    run_with_timeout 20 env \
+      PATH="${sandbox}/bin:${PATH}" \
+      SELF_HARNESS_AUTO_CHALLENGE=0 \
+      SELF_HARNESS_SKIP_COMMIT=1 \
+      SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS=0 \
+      SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS=0 \
+      SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS=1 \
+      SELF_HARNESS_INTERVAL_SECONDS=60 \
+      bash scripts/supervisor.sh loop
+  ) >"$log_file" 2>&1
+  status=$?
+  set -e
+
+  if [ "$status" -ne 124 ]; then
+    sed -n '1,220p' "$log_file" >&2
+    fail "invalid loop source-change returned ${status}; expected timeout with stable copy still in control"
+  fi
+
+  if ! rg -q 'supervisor source changed during stable-copy loop but failed readiness check; keeping stable copy in control' "$log_file"; then
+    sed -n '1,220p' "$log_file" >&2
+    fail "loop did not report blocked handoff for invalid checked-out supervisor"
+  fi
+
+  if rg -q 'passed readiness check; exiting' "$log_file"; then
+    sed -n '1,220p' "$log_file" >&2
+    fail "loop treated invalid checked-out supervisor as a safe handoff"
+  fi
+
+  if [ ! -f "${sandbox}/scripts/supervisor.sh" ]; then
+    fail "invalid fixture did not leave a checked-out supervisor file"
+  fi
+
+  if bash -n "${sandbox}/scripts/supervisor.sh" 2>/dev/null; then
+    fail "invalid fixture did not create a syntactically invalid checked-out supervisor"
+  fi
+
+  log "loop blocked handoff after invalid supervisor source change"
 }
 
 main() {
   mkdir -p "$WORK_DIR"
   check_self_modified_once_survives
   check_idle_once_skips_launch
-  check_loop_exits_after_source_change
+  check_loop_handoff_with_valid_source_change
+  check_loop_blocks_invalid_source_change
   log "ok"
 }
 

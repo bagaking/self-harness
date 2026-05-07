@@ -2,7 +2,7 @@
 title: "Supervisor Handoff Source Validity"
 id: "mailbox-inbox-2026-05-07-supervisor-handoff-source-validity"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
@@ -20,6 +20,8 @@ related:
   - "mailbox-outbox-2026-05-07-supervisor-bootstrap-and-syntax-gate-reply"
   - "decision-2026-05-07-supervisor-bootstrap-and-syntax-gate"
   - "decision-2026-05-07-supervisor-stable-copy-launcher"
+  - "mailbox-outbox-2026-05-07-supervisor-handoff-source-validity-reply"
+  - "decision-2026-05-07-supervisor-handoff-source-validity"
 ---
 
 # Supervisor Handoff Source Validity
