@@ -12,7 +12,7 @@ tags:
   - escalation
   - commit-gate
   - branch-evolution
-summary: "Records a branch-local executable check that makes feedback-bearing mailbox work prove its escalation and continuity boundary."
+summary: "Records a branch-local executable check that makes feedback-bearing mailbox work prove its escalation and continuity boundary, including trigger-backed refusal paths."
 source: "mailbox"
 confidence: "high"
 related:
@@ -50,9 +50,11 @@ It also requires a changed durable mechanism under `scripts/`, `skills/`, or mem
 The feedback-continuity path must be one of:
 
 - one concrete `Next supervisor pressure:` line that the supervisor can turn into the next inbox;
-- one `No next supervisor pressure:` refusal that explains why further escalation would be noisy and includes either `Smaller useful task:` or `Stop condition:`.
+- one `No next supervisor pressure:` refusal that explains why further escalation would be noisy and includes one concrete `Supervisor evaluation trigger:` plus either `Smaller useful task:` or `Stop condition:`.
 
 Generic next-pressure lines such as `raise the bar`, `improve`, `sweep`, or `inspect repository` are rejected. A report should not include both continuity paths.
+
+The refusal trigger matters because a local anti-noise boundary is not permission for the supervisor loop to stop evaluating. A refusal must name the future signal that would make more pressure useful again, such as a failing gate, a changed supervisor path, a repeated missed claim, or a concrete evaluation warning tied to real task loss.
 
 ## Anti-Noise Rule
 
@@ -79,7 +81,8 @@ Continuity fixtures used during the 2026-05-07 pressure run:
 
 - negative fixture: a changed feedback outbox with all old required sections but no next-pressure marker and no refusal failed with `missing feedback continuity marker`;
 - marker-positive fixture: the same report plus one concrete `Next supervisor pressure:` line passed;
-- refusal-positive fixture: the same report plus one `No next supervisor pressure:` line and `Smaller useful task:` passed.
+- old-refusal negative fixture: the same report plus one `No next supervisor pressure:` line and `Smaller useful task:` but no `Supervisor evaluation trigger:` failed;
+- refusal-positive fixture: the same report plus one `No next supervisor pressure:` line, one concrete `Supervisor evaluation trigger:`, and `Smaller useful task:` passed.
 
 ## Return-To-Main Judgment
 

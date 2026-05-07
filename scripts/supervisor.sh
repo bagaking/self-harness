@@ -523,7 +523,7 @@ Use the feedback to raise the bar without creating generic churn.
 - Do not modify \`constitution/\`.
 - Keep durable paths repository-relative and scratch work under \`.self-harness/tmp/\`.
 - Run \`scripts/feedback-escalation-check.sh\`, \`scripts/docs-check.sh\`, and focused validation before handoff.
-- Include exactly one concrete \`Next supervisor pressure:\` line, or one bounded \`No next supervisor pressure:\` refusal with a \`Smaller useful task:\` or \`Stop condition:\`.
+- Include exactly one concrete \`Next supervisor pressure:\` line, or one bounded \`No next supervisor pressure:\` refusal with a concrete \`Supervisor evaluation trigger:\` plus a \`Smaller useful task:\` or \`Stop condition:\`.
 EOF
 }
 

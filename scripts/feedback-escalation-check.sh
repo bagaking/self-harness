@@ -17,6 +17,8 @@ generic_next_pressure_pattern='^Next supervisor pressure:[[:space:]]*(continue|k
 no_next_pressure_pattern='^No next supervisor pressure:[[:space:]]*[^[:space:]].*[[:alnum:]]'
 no_next_pressure_noise_pattern='(further escalation would be noisy|would be noisy|noisy|noise|generic|low-value|redundant)'
 no_next_pressure_bounded_pattern='^(Smaller useful task|Stop condition):[[:space:]]*[^[:space:]].*[[:alnum:]]'
+supervisor_evaluation_trigger_pattern='^Supervisor evaluation trigger:[[:space:]]*[^[:space:]].*[[:alnum:]]'
+generic_supervisor_evaluation_trigger_pattern='^Supervisor evaluation trigger:[[:space:]]*(continue|keep evaluating|raise the bar|do more|review later|watch|monitor|process mailbox|inspect repository|generic|same as above|none)([[:space:][:punct:]]|$)'
 
 changed_files() {
   {
@@ -100,16 +102,23 @@ document_has_concrete_next_pressure() {
   count="$(LC_ALL=C rg -c -- "$next_pressure_pattern" "$file" || true)"
   [ "$count" = "1" ] || return 1
 
-  ! LC_ALL=C rg -qi -- "$generic_next_pressure_pattern" "$file"
+  if LC_ALL=C rg -qi -- "$generic_next_pressure_pattern" "$file"; then
+    return 1
+  fi
 }
 
 document_has_no_next_pressure_refusal() {
   local rel="$1"
   local file="${ROOT_DIR}/${rel}"
-  local count
+  local count trigger_count
 
   count="$(LC_ALL=C rg -c -- "$no_next_pressure_pattern" "$file" || true)"
   [ "$count" = "1" ] || return 1
+  trigger_count="$(LC_ALL=C rg -c -- "$supervisor_evaluation_trigger_pattern" "$file" || true)"
+  [ "$trigger_count" = "1" ] || return 1
+  if LC_ALL=C rg -qi -- "$generic_supervisor_evaluation_trigger_pattern" "$file"; then
+    return 1
+  fi
   document_matches "$rel" "$no_next_pressure_noise_pattern" || return 1
   document_matches "$rel" "$no_next_pressure_bounded_pattern"
 }
@@ -133,7 +142,7 @@ require_feedback_continuity_marker() {
     fi
 
     echo "feedback-escalation-check: missing feedback continuity marker in ${rel}" >&2
-    echo "feedback-escalation-check: add exactly one concrete 'Next supervisor pressure:' line, or exactly one 'No next supervisor pressure:' refusal with a noisy-escalation reason plus 'Smaller useful task:' or 'Stop condition:'" >&2
+    echo "feedback-escalation-check: add exactly one concrete 'Next supervisor pressure:' line, or exactly one 'No next supervisor pressure:' refusal with a noisy-escalation reason plus a concrete 'Supervisor evaluation trigger:' and 'Smaller useful task:' or 'Stop condition:'" >&2
     errors=$((errors + 1))
   done
 

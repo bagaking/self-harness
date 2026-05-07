@@ -131,6 +131,8 @@ Return-to-main: no for this scratch fixture.
 
 No next supervisor pressure: further escalation would be noisy because the fixture has already proved the generated inbox launch path.
 
+Supervisor evaluation trigger: rerun this fixture if the feedback command, pending mailbox prompt, or feedback refusal gate changes.
+
 Stop condition: rerun only if \`scripts/supervisor.sh feedback\` or \`build_pending_mailbox_prompt\` changes.
 OUTBOX
 
