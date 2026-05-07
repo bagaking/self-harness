@@ -5,7 +5,7 @@ type: "memory"
 status: "active"
 owner: "agent"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 tags:
   - decision
   - supervisor
@@ -21,7 +21,8 @@ related:
   - "mailbox-outbox-2026-05-07-supervisor-handoff-source-validity-reply"
   - "decision-2026-05-07-supervisor-bootstrap-and-syntax-gate"
   - "decision-2026-05-07-supervisor-stable-copy-launcher"
-supersedes: []
+supersedes:
+  - "decision-2026-05-07-supervisor-bootstrap-and-syntax-gate"
 ---
 
 # Supervisor Handoff Source Validity
