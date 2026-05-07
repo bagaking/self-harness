@@ -35,6 +35,8 @@ NEXT_PRESSURE_MARKER_PATTERN='^Next supervisor pressure:[[:space:]]*.'
 
 SUPERVISOR_STABLE_COPY_ACTIVE=0
 SUPERVISOR_SOURCE_FINGERPRINT_AT_START=""
+SUPERVISOR_STABLE_SOURCE_PATH=""
+SUPERVISOR_SOURCE_RECOVERED=0
 
 INTERVAL_SECONDS="${SELF_HARNESS_INTERVAL_SECONDS:-$DEFAULT_INTERVAL_SECONDS}"
 RESUME_MAX_AGE_SECONDS="${SELF_HARNESS_RESUME_MAX_AGE_SECONDS:-$DEFAULT_RESUME_MAX_AGE_SECONDS}"
@@ -74,6 +76,7 @@ run_from_stable_supervisor_copy_if_needed() {
   current_script="$(current_supervisor_script_path)"
   if [ -n "${SELF_HARNESS_SUPERVISOR_STABLE_PATH:-}" ] && [ "$current_script" = "$SELF_HARNESS_SUPERVISOR_STABLE_PATH" ]; then
     SUPERVISOR_STABLE_COPY_ACTIVE=1
+    SUPERVISOR_STABLE_SOURCE_PATH="$current_script"
     SUPERVISOR_SOURCE_FINGERPRINT_AT_START="$(file_fingerprint "${ROOT_DIR}/scripts/supervisor.sh" || true)"
     unset SELF_HARNESS_SUPERVISOR_STABLE_PATH
     unset SELF_HARNESS_SUPERVISOR_ROOT
@@ -884,6 +887,87 @@ commit_changes_with_repair() {
   commit_changes "$@"
 }
 
+write_invalid_supervisor_recovery_incident() {
+  local trigger="$1"
+  local date_value id file
+
+  date_value="$(date -u +"%Y-%m-%d")"
+  id="$(date -u +"%Y-%m-%d-%H%M%S-invalid-supervisor-recovery")"
+  file="${ROOT_DIR}/memory/incidents/${id}.md"
+  mkdir -p "${ROOT_DIR}/memory/incidents"
+
+  cat >"$file" <<EOF
+---
+title: "Invalid Supervisor Source Recovery"
+id: "incident-${id}"
+type: "incident"
+status: "active"
+owner: "supervisor"
+created: "${date_value}"
+updated: "${date_value}"
+tags:
+  - incident
+  - supervisor
+  - control-plane
+  - recovery
+summary: "Records a stable-copy recovery that restored invalid checked-out supervisor source after the post-run commit gate failed."
+---
+
+# Invalid Supervisor Source Recovery
+
+## Summary
+
+The post-run commit path failed while the checked-out `scripts/supervisor.sh` was syntactically invalid. The stable supervisor copy restored `scripts/supervisor.sh` from the launch-time valid copy before retrying a bounded incident commit.
+
+## Trigger
+
+${trigger}
+
+## Recovery Boundary
+
+- Restored path: `scripts/supervisor.sh`
+- Source of restored content: the private stable copy created before the Codex child ran
+- Unrelated worktree changes: preserved
+- Constitution changes: not allowed
+
+## Next Check
+
+Inspect the run's mailbox output, diary, and this incident together. The recovery makes the next normal restart parse the checked-out supervisor again; it does not prove that the discarded invalid supervisor edit was semantically correct.
+EOF
+}
+
+recover_invalid_supervisor_source_after_failed_commit() {
+  local trigger="$1"
+  local source_script tmp_script
+
+  [ "$SUPERVISOR_STABLE_COPY_ACTIVE" = "1" ] || return 1
+  [ -n "$SUPERVISOR_STABLE_SOURCE_PATH" ] || return 1
+
+  source_script="${ROOT_DIR}/scripts/supervisor.sh"
+  [ -f "$source_script" ] || return 1
+  [ -f "$SUPERVISOR_STABLE_SOURCE_PATH" ] || return 1
+
+  if bash -n "$source_script" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  if ! bash -n "$SUPERVISOR_STABLE_SOURCE_PATH" >/dev/null 2>&1; then
+    log "invalid supervisor recovery skipped: stable copy did not parse"
+    return 1
+  fi
+
+  write_invalid_supervisor_recovery_incident "$trigger"
+
+  tmp_script="${TMP_DIR}/supervisor-recovery-$$.sh"
+  cp "$SUPERVISOR_STABLE_SOURCE_PATH" "$tmp_script"
+  chmod +x "$tmp_script"
+  mv "$tmp_script" "$source_script"
+
+  SUPERVISOR_SOURCE_RECOVERED=1
+  log "recovered invalid checked-out supervisor source from stable copy"
+  return 0
+}
+
 latest_activity_epoch() {
   local output="$1"
   local latest session_mtime output_mtime log_mtime max_mtime
@@ -1164,6 +1248,12 @@ run_codex_once() {
   if [ "${SELF_HARNESS_SKIP_COMMIT:-0}" != "1" ]; then
     seed_post_run_pressure_challenge_if_needed
     if ! commit_changes_with_repair; then
+      if recover_invalid_supervisor_source_after_failed_commit "post-run commit gate failed after Codex child exit"; then
+        if commit_changes -m "incident: recovered invalid supervisor source"; then
+          return 0
+        fi
+        log "post-run recovery commit failed"
+      fi
       log "post-run commit failed"
       return 1
     fi
@@ -1179,6 +1269,10 @@ run_loop() {
     run_codex_once || status=$?
     if [ "$status" -ne 0 ]; then
       log "run failed with status ${status}"
+    fi
+    if [ "$SUPERVISOR_SOURCE_RECOVERED" = "1" ]; then
+      log "supervisor source recovered during stable-copy loop; exiting so the next start uses checked-out source"
+      return 0
     fi
     if stable_supervisor_source_changed; then
       if stable_supervisor_handoff_ready; then

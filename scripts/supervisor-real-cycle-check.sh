@@ -354,7 +354,7 @@ check_valid_loop_commits_and_exits() {
   log "valid foreground loop committed checked-out supervisor change and exited after readiness"
 }
 
-check_invalid_loop_fails_closed() {
+check_invalid_loop_recovers_checked_out_source() {
   local sandbox log_file status invocations
   sandbox="${WORK_DIR}/invalid-loop"
   log_file="${WORK_DIR}/invalid-loop.log"
@@ -376,12 +376,12 @@ check_invalid_loop_fails_closed() {
   status=$?
   set -e
 
-  if [ "$status" -ne 124 ]; then
+  if [ "$status" -ne 0 ]; then
     sed -n '1,260p' "$log_file" >&2
-    fail "invalid loop returned ${status}; expected bounded harness timeout with stable copy still in control"
+    fail "invalid loop returned ${status}; expected bounded recovery and clean exit"
   fi
 
-  [ "$(commit_count "$sandbox")" -eq 1 ] || fail "invalid loop created a commit despite invalid supervisor syntax"
+  [ "$(commit_count "$sandbox")" -eq 2 ] || fail "invalid loop did not create exactly one recovery incident commit"
   rg -q 'post-run commit gate failed; asking Codex session for one repair attempt' "$log_file" || {
     sed -n '1,260p' "$log_file" >&2
     fail "invalid loop did not trigger bounded repair path"
@@ -390,18 +390,29 @@ check_invalid_loop_fails_closed() {
     sed -n '1,260p' "$log_file" >&2
     fail "invalid loop did not fail through shell syntax gate"
   }
-  rg -q 'supervisor source changed during stable-copy loop but failed readiness check; keeping stable copy in control' "$log_file" || {
+  rg -q 'recovered invalid checked-out supervisor source from stable copy' "$log_file" || {
     sed -n '1,260p' "$log_file" >&2
-    fail "invalid loop did not keep the stable copy in control"
+    fail "invalid loop did not recover checked-out supervisor source"
   }
+  rg -q 'supervisor source recovered during stable-copy loop; exiting so the next start uses checked-out source' "$log_file" || {
+    sed -n '1,260p' "$log_file" >&2
+    fail "invalid loop did not exit after explicit supervisor source recovery"
+  }
+  if rg -q 'supervisor source changed during stable-copy loop but failed readiness check; keeping stable copy in control' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "invalid loop still left stable copy in blocked handoff state after recovery"
+  fi
   if rg -q 'passed readiness check; exiting' "$log_file"; then
     sed -n '1,260p' "$log_file" >&2
-    fail "invalid loop looked like a clean handoff"
+    fail "invalid loop treated the invalid edit as a normal readiness handoff"
   fi
   invocations="$(wc -l <"${sandbox}/.self-harness/tmp/fake-codex-invocations.log" | tr -d '[:space:]')"
   [ "$invocations" = "2" ] || fail "invalid loop expected exactly one repair attempt, got ${invocations} fake Codex invocations"
+  git -C "$sandbox" show --name-only --format= HEAD | rg -q '^memory/incidents/.*invalid-supervisor-recovery\.md$' || fail "invalid recovery commit did not include a recovery incident"
+  bash -n "${sandbox}/scripts/supervisor.sh" || fail "invalid recovery did not leave checked-out supervisor source valid"
+  assert_clean_worktree "$sandbox"
 
-  log "invalid foreground loop rejected checked-out supervisor change without packaging success"
+  log "invalid foreground loop recovered checked-out supervisor source after fail-closed gate"
 }
 
 check_post_run_pressure_seeding() {
@@ -447,7 +458,7 @@ main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
   check_valid_loop_commits_and_exits
-  check_invalid_loop_fails_closed
+  check_invalid_loop_recovers_checked_out_source
   check_post_run_pressure_seeding
   log "ok"
 }

@@ -2,7 +2,7 @@
 title: "Supervisor Invalid Recovery Pressure"
 id: "mailbox-inbox-2026-05-07-supervisor-invalid-recovery-pressure"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
@@ -19,6 +19,8 @@ summary: "Requires an invalid checked-out supervisor recovery story after fail-c
 related:
   - "mailbox-outbox-2026-05-07-supervisor-real-cycle-pressure-reply"
   - "decision-2026-05-07-post-run-pressure-marker"
+  - "mailbox-outbox-2026-05-07-supervisor-invalid-recovery-pressure-reply"
+  - "decision-2026-05-07-invalid-supervisor-recovery"
 ---
 
 # Supervisor Invalid Recovery Pressure

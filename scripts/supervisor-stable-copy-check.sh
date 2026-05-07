@@ -168,10 +168,28 @@ write_fake_commit_path_git() {
     printf '%s\n' '    exit 0'
     printf '%s\n' '    ;;'
     printf '%s\n' '  "ls-files --others --exclude-standard")'
+    printf '%s\n' '    if [ -d memory/incidents ]; then'
+    printf '%s\n' '      find memory/incidents -maxdepth 1 -type f -name "*.md" | sort'
+    printf '%s\n' '    fi'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "diff --name-only --cached")'
     printf '%s\n' '    exit 0'
     printf '%s\n' '    ;;'
     printf '%s\n' '  "status --porcelain --untracked-files=all")'
     printf '%s\n' '    echo " M scripts/supervisor.sh"'
+    printf '%s\n' '    if [ -d memory/incidents ]; then'
+    printf '%s\n' '      find memory/incidents -maxdepth 1 -type f -name "*.md" | sort | sed "s/^/?? /"'
+    printf '%s\n' '    fi'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "add --all -- .")'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "diff --cached --quiet")'
+    printf '%s\n' '    exit 1'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  commit\ -m\ incident:*)'
     printf '%s\n' '    exit 0'
     printf '%s\n' '    ;;'
     printf '%s\n' '  *)'
@@ -244,6 +262,10 @@ check_self_modified_once_survives() {
 
   if ! find "${sandbox}/.self-harness/run" -maxdepth 1 -type f -name 'supervisor-stable-*.sh' | rg -q .; then
     fail "stable supervisor copy was not created"
+  fi
+
+  if bash -n "${sandbox}/scripts/supervisor.sh" 2>/dev/null; then
+    fail "skip-commit fixture should leave invalid checked-out supervisor source for the handoff gate"
   fi
 
   log "self-modified once survived from stable private copy"
@@ -381,7 +403,7 @@ check_loop_blocks_invalid_source_change() {
   log "loop blocked handoff after invalid supervisor source change"
 }
 
-check_loop_commit_path_rejects_invalid_source_change() {
+check_loop_commit_path_recovers_invalid_source_change() {
   local sandbox log_file status
   sandbox="${WORK_DIR}/loop-invalid-source-change-normal-commit"
   log_file="${WORK_DIR}/loop-invalid-source-change-normal-commit.log"
@@ -405,9 +427,9 @@ check_loop_commit_path_rejects_invalid_source_change() {
   status=$?
   set -e
 
-  if [ "$status" -ne 124 ]; then
+  if [ "$status" -ne 0 ]; then
     sed -n '1,260p' "$log_file" >&2
-    fail "invalid normal-commit loop returned ${status}; expected timeout with stable copy still in control"
+    fail "invalid normal-commit loop returned ${status}; expected recovery and clean handoff"
   fi
 
   if ! rg -q 'post-run commit gate failed; asking Codex session for one repair attempt' "$log_file"; then
@@ -420,29 +442,29 @@ check_loop_commit_path_rejects_invalid_source_change() {
     fail "normal commit path did not detect the invalid checked-out supervisor through shell syntax validation"
   fi
 
+  if ! rg -q 'recovered invalid checked-out supervisor source from stable copy' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "normal commit path did not recover invalid checked-out supervisor source"
+  fi
+
   if rg -q 'unexpected fake git command: add ' "$log_file"; then
     sed -n '1,260p' "$log_file" >&2
-    fail "normal commit path staged changes after the gate rejected invalid supervisor syntax"
+    fail "normal commit path staged changes through fake git; fixture no longer covers the command surface"
   fi
 
   if rg -q 'unexpected fake git command: commit ' "$log_file"; then
     sed -n '1,260p' "$log_file" >&2
-    fail "normal commit path attempted a commit after the gate rejected invalid supervisor syntax"
+    fail "normal commit path attempted a fake git commit; fixture no longer covers the command surface"
   fi
 
-  if ! rg -q 'post-run commit failed' "$log_file"; then
+  if ! rg -q 'supervisor source recovered during stable-copy loop; exiting so the next start uses checked-out source' "$log_file"; then
     sed -n '1,260p' "$log_file" >&2
-    fail "run did not report the failed post-run commit after invalid supervisor syntax"
+    fail "loop did not report the explicit recovered-source exit"
   fi
 
-  if ! rg -q 'supervisor source changed during stable-copy loop but failed readiness check; keeping stable copy in control' "$log_file"; then
+  if rg -q 'supervisor source changed during stable-copy loop but failed readiness check' "$log_file"; then
     sed -n '1,260p' "$log_file" >&2
-    fail "loop did not report blocked handoff after normal commit-path failure"
-  fi
-
-  if rg -q 'passed readiness check; exiting' "$log_file"; then
-    sed -n '1,260p' "$log_file" >&2
-    fail "normal commit path treated invalid checked-out supervisor as a safe handoff"
+    fail "normal commit path still left blocked invalid supervisor source after recovery"
   fi
 
   if rg -q 'unexpected fake git command' "$log_file"; then
@@ -450,11 +472,15 @@ check_loop_commit_path_rejects_invalid_source_change() {
     fail "normal commit fixture did not cover the supervisor git command surface"
   fi
 
-  if bash -n "${sandbox}/scripts/supervisor.sh" 2>/dev/null; then
-    fail "normal commit fixture did not leave a syntactically invalid checked-out supervisor"
+  if ! bash -n "${sandbox}/scripts/supervisor.sh" 2>/dev/null; then
+    fail "normal commit recovery did not leave a syntactically valid checked-out supervisor"
   fi
 
-  log "normal commit path rejected invalid supervisor source before safe handoff"
+  if ! find "${sandbox}/memory/incidents" -maxdepth 1 -type f -name '*invalid-supervisor-recovery.md' | rg -q .; then
+    fail "normal commit recovery did not write an invalid-supervisor recovery incident"
+  fi
+
+  log "normal commit path recovered invalid supervisor source before safe handoff"
 }
 
 main() {
@@ -463,7 +489,7 @@ main() {
   check_idle_once_skips_launch
   check_loop_handoff_with_valid_source_change
   check_loop_blocks_invalid_source_change
-  check_loop_commit_path_rejects_invalid_source_change
+  check_loop_commit_path_recovers_invalid_source_change
   log "ok"
 }
 
