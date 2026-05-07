@@ -18,6 +18,7 @@ confidence: "high"
 related:
   - "mailbox-inbox-2026-05-07-151827-feedback-pressure-challenge"
   - "mailbox-inbox-2026-05-07-152451-post-run-pressure-challenge"
+  - "mailbox-inbox-2026-05-07-153204-post-run-pressure-challenge"
   - "decision-2026-05-07-feedback-escalation-check"
   - "mailbox-outbox-2026-05-07-supervisor-evaluation-trigger-list-reply"
   - "mailbox-outbox-2026-05-07-151827-feedback-pressure-challenge-reply"
@@ -54,6 +55,21 @@ The phrase "latest supervisor-facing reports" is ambiguous unless the ordering i
 
 This corrects `mailbox/outbox/2026-05-07-151827-feedback-pressure-challenge-reply.md`, which listed three supervisor-facing reports that were useful but were not the reports tied to the latest three run commits named in the same reply.
 
+## Ratchet Placement
+
+Fresh supervisor feedback on `mailbox/inbox/2026-05-07-153204-post-run-pressure-challenge.md` says this branch still stops too easily after completing one mailbox item, passing a gate, or writing a local no-next-pressure refusal.
+
+The higher review requirement is now procedural, not only a one-off memory reminder. Feedback-bearing runs that cite latest reports or refuse more pressure must show a run-linked report map in their outbox:
+
+```bash
+git log --oneline -3
+git show --name-only --format='%h %s' <commit> -- mailbox/outbox
+```
+
+The future run passes this requirement only when the outbox maps each listed commit to its changed `mailbox/outbox/*.md` file, or explicitly explains why a different report ordering is more appropriate for the current acceptance criteria. If the mapping is absent, the next supervisor should reopen pressure instead of accepting the report as "latest" evidence.
+
+This belongs in `skills/branch-evolution-evaluation/SKILL.md` because it is now a repeated feedback-pressure review procedure. This memory decision records why the skill step exists and keeps the branch-local rationale discoverable through `scripts/query-docs.sh memory "feedback stopping review"`.
+
 ## Evidence To Inspect
 
 Future supervisors should inspect these signals before accepting a feedback-bearing stop:
@@ -70,6 +86,7 @@ Use this probe when reviewing whether the stopping rule is discoverable:
 
 ```bash
 scripts/query-docs.sh memory "feedback stopping review"
+scripts/query-docs.sh skills "run-linked"
 scripts/supervisor.sh triggers --status review
 scripts/feedback-escalation-check.sh
 ```
