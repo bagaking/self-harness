@@ -115,8 +115,28 @@ is_claim_command() {
   LC_ALL=C rg -q '(^|[;&|[:space:]])mv[[:space:]]+mailbox/inbox/[^[:space:]]+\.md[[:space:]]+mailbox/processing(/[^[:space:]]+\.md|/)?([;&|[:space:]]|$)' <<<"$cmd"
 }
 
+is_required_bootstrap_file_probe() {
+  local cmd="$1"
+
+  case "$cmd" in
+    "rg --files -g 'AGENTS.md' -g 'constitution/00-charter.md'"|\
+    'rg --files -g "AGENTS.md" -g "constitution/00-charter.md"'|\
+    "pwd && rg --files -g 'AGENTS.md' -g 'constitution/00-charter.md'"|\
+    'pwd && rg --files -g "AGENTS.md" -g "constitution/00-charter.md"')
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 is_broad_preclaim_command() {
   local cmd="$1"
+
+  if is_required_bootstrap_file_probe "$cmd"; then
+    return 1
+  fi
 
   if LC_ALL=C rg -q '(^|[;&|[:space:]])scripts/query-docs\.sh[[:space:]]' <<<"$cmd"; then
     return 0

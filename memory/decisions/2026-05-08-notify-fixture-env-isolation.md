@@ -2,7 +2,7 @@
 id: "decision-2026-05-08-notify-fixture-env-isolation"
 title: "Notify Fixture Env Isolation"
 type: "memory"
-status: "active"
+status: "superseded"
 owner: "agent"
 created: "2026-05-08"
 updated: "2026-05-08"
@@ -17,11 +17,16 @@ source: "mailbox/done/2026-05-07-193223-notify-fixture-env-isolation.md"
 confidence: "high"
 related:
   - "mailbox/outbox/2026-05-08-notify-fixture-env-isolation-reply.md"
+  - "memory/decisions/2026-05-08-notify-fixture-complete-isolation.md"
   - "memory/decisions/2026-05-08-status-sync-return-to-main-deferral.md"
   - "scripts/supervisor-notify-fixture-check.sh"
+superseded_by:
+  - "memory/decisions/2026-05-08-notify-fixture-complete-isolation.md"
 ---
 
 # Notify Fixture Env Isolation
+
+Superseded by `memory/decisions/2026-05-08-notify-fixture-complete-isolation.md`, which expands the isolation contract from a fixed recipient/bin list to the complete `SELF_HARNESS_NOTIFY_*` namespace and records the per-process scratch requirement.
 
 ## Decision
 

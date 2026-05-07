@@ -3,7 +3,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-WORK_DIR="${ROOT_DIR}/.self-harness/tmp/supervisor-notify-fixture-check"
+BASE_WORK_DIR="${ROOT_DIR}/.self-harness/tmp/supervisor-notify-fixture-check"
+WORK_DIR=""
 
 fail() {
   echo "supervisor-notify-fixture-check: $*" >&2
@@ -15,11 +16,11 @@ log() {
 }
 
 clear_notification_env() {
-  unset SELF_HARNESS_NOTIFY_CHAT_ID
-  unset SELF_HARNESS_NOTIFY_USER_ID
-  unset SELF_HARNESS_NOTIFY_LARK_BIN
-  unset SELF_HARNESS_NOTIFY_AS
-  unset SELF_HARNESS_NOTIFY_DRY_RUN
+  local name
+
+  for name in "${!SELF_HARNESS_NOTIFY_@}"; do
+    unset "$name"
+  done
 }
 
 write_fake_lark_cli() {
@@ -150,8 +151,10 @@ run_missing_lark_case() {
 }
 
 main() {
-  rm -rf "$WORK_DIR"
-  mkdir -p "$WORK_DIR"
+  mkdir -p "$BASE_WORK_DIR"
+  WORK_DIR="$(mktemp -d "${BASE_WORK_DIR}/run.XXXXXX")"
+  trap 'rm -rf "$WORK_DIR"' EXIT
+
   run_positive_fake_send
   run_not_configured_case
   run_missing_lark_case

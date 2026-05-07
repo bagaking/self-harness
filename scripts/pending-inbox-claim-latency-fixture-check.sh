@@ -63,6 +63,31 @@ write_claim_first_session() {
 EOF
 }
 
+write_bootstrap_probe_session() {
+  local file="$1"
+  cat >"$file" <<'EOF'
+{"timestamp":"2026-05-07T00:00:00.000Z","type":"session_meta","payload":{"id":"bootstrap-probe"}}
+{"timestamp":"2026-05-07T00:00:00.100Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Pending mailbox before launch:\n- mailbox/inbox/pending-task.md\n\nMailbox priority:\n- After reading AGENTS.md and constitution/00-charter.md, inspect the listed pending inbox before any broad repository sweep."}]}}
+{"timestamp":"2026-05-07T00:00:03.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"pwd && rg --files -g 'AGENTS.md' -g 'constitution/00-charter.md'\"}"}}
+{"timestamp":"2026-05-07T00:00:09.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n '1,220p' AGENTS.md\"}"}}
+{"timestamp":"2026-05-07T00:00:17.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n '1,260p' constitution/00-charter.md\"}"}}
+{"timestamp":"2026-05-07T00:00:31.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"mv mailbox/inbox/pending-task.md mailbox/processing/pending-task.md\"}"}}
+{"timestamp":"2026-05-07T00:00:40.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"scripts/query-docs.sh constitution mailbox\"}"}}
+EOF
+}
+
+write_broad_rg_session() {
+  local file="$1"
+  cat >"$file" <<'EOF'
+{"timestamp":"2026-05-07T00:00:00.000Z","type":"session_meta","payload":{"id":"broad-rg"}}
+{"timestamp":"2026-05-07T00:00:00.100Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Pending mailbox before launch:\n- mailbox/inbox/pending-task.md\n\nMailbox priority:\n- After reading AGENTS.md and constitution/00-charter.md, inspect the listed pending inbox before any broad repository sweep."}]}}
+{"timestamp":"2026-05-07T00:00:03.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n '1,220p' AGENTS.md\"}"}}
+{"timestamp":"2026-05-07T00:00:08.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n '1,260p' constitution/00-charter.md\"}"}}
+{"timestamp":"2026-05-07T00:00:14.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"rg --files memory\"}"}}
+{"timestamp":"2026-05-07T00:00:22.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"mv mailbox/inbox/pending-task.md mailbox/processing/pending-task.md\"}"}}
+EOF
+}
+
 write_no_pending_session() {
   local file="$1"
   cat >"$file" <<'EOF'
@@ -126,6 +151,46 @@ check_allows_claim_first() {
   rg -q 'pending-inbox-claim-latency-check: ok .*claim_delay_seconds=11' "$log_file" || fail "claim-first pass did not report the expected claim delay"
 
   log "allows claim-first pending inbox launch"
+}
+
+check_allows_required_bootstrap_probe() {
+  local sandbox log_file session
+  sandbox="${WORK_DIR}/bootstrap-probe"
+  log_file="${WORK_DIR}/bootstrap-probe.log"
+  session="${sandbox}/sessions/bootstrap-probe.jsonl"
+  prepare_sandbox "$sandbox"
+  write_bootstrap_probe_session "$session"
+
+  run_scanner "$sandbox" "$session" "$log_file" || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "required bootstrap file probe should pass"
+  }
+  rg -q 'pending-inbox-claim-latency-check: ok .*claim_delay_seconds=31' "$log_file" || fail "bootstrap probe pass did not report the expected claim delay"
+
+  log "allows required bootstrap file probe before claim"
+}
+
+check_rejects_broad_rg_before_claim() {
+  local sandbox log_file session status
+  sandbox="${WORK_DIR}/broad-rg"
+  log_file="${WORK_DIR}/broad-rg.log"
+  session="${sandbox}/sessions/broad-rg.jsonl"
+  prepare_sandbox "$sandbox"
+  write_broad_rg_session "$session"
+
+  if run_scanner "$sandbox" "$session" "$log_file"; then
+    status=0
+  else
+    status=$?
+  fi
+  [ "$status" -eq 1 ] || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "broad rg session returned ${status}, expected 1"
+  }
+  rg -q 'broad pre-claim commands:' "$log_file" || fail "broad rg session did not report broad pre-claim commands"
+  rg -q 'rg --files memory' "$log_file" || fail "broad rg session did not name rg as pre-claim evidence"
+
+  log "rejects broad rg before claim"
 }
 
 check_skips_no_pending_prompt() {
@@ -203,6 +268,8 @@ main() {
   mkdir -p "$WORK_DIR"
   check_rejects_delayed_broad_claim
   check_allows_claim_first
+  check_allows_required_bootstrap_probe
+  check_rejects_broad_rg_before_claim
   check_skips_no_pending_prompt
   check_gate_rejects_changed_delayed_session
   check_gate_allows_changed_claim_first_session
