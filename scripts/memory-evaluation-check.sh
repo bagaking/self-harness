@@ -138,6 +138,220 @@ count_supersedes_links() {
     '
 }
 
+count_contradiction_fixtures() {
+  local memory_dir="${ROOT_DIR}/memory"
+
+  if [ ! -d "$memory_dir" ]; then
+    printf '0\n'
+    return 0
+  fi
+
+  find "$memory_dir" -type f -name '*.md' -print0 \
+    | xargs -0 awk '
+      function trim(value) {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        return value
+      }
+
+      function clean(value) {
+        value = trim(value)
+        gsub(/^"|"$/, "", value)
+        return value
+      }
+
+      function add_conflict(value) {
+        value = clean(value)
+        if (value != "" && value != "[]" && value != "null" && value != "~") {
+          conflicts = conflicts (conflicts == "" ? "" : ",") value
+        }
+      }
+
+      function flush_record() {
+        if (id != "" && fixture == "memory-evaluation-conflict" && subject != "" && conflict_value != "" && conflicts != "") {
+          print id "\t" subject "\t" conflict_value "\t" conflicts
+        }
+      }
+
+      FNR == 1 {
+        if (NR > 1) {
+          flush_record()
+        }
+        id = ""
+        fixture = ""
+        subject = ""
+        conflict_value = ""
+        conflicts = ""
+        in_frontmatter = ($0 == "---")
+        done_frontmatter = !in_frontmatter
+        in_conflicts = 0
+        next
+      }
+
+      done_frontmatter {
+        next
+      }
+
+      in_frontmatter && $0 == "---" {
+        done_frontmatter = 1
+        in_frontmatter = 0
+        in_conflicts = 0
+        next
+      }
+
+      in_frontmatter {
+        if ($0 ~ /^[A-Za-z_][A-Za-z0-9_-]*:/ && $0 !~ /^conflicts_with:/) {
+          in_conflicts = 0
+        }
+
+        if ($0 ~ /^id:[[:space:]]*.+/) {
+          value = $0
+          sub(/^id:[[:space:]]*/, "", value)
+          id = clean(value)
+          next
+        }
+
+        if ($0 ~ /^conflict_fixture:[[:space:]]*.+/) {
+          value = $0
+          sub(/^conflict_fixture:[[:space:]]*/, "", value)
+          fixture = clean(value)
+          next
+        }
+
+        if ($0 ~ /^conflict_subject:[[:space:]]*.+/) {
+          value = $0
+          sub(/^conflict_subject:[[:space:]]*/, "", value)
+          subject = clean(value)
+          next
+        }
+
+        if ($0 ~ /^conflict_value:[[:space:]]*.+/) {
+          value = $0
+          sub(/^conflict_value:[[:space:]]*/, "", value)
+          conflict_value = clean(value)
+          next
+        }
+
+        if ($0 ~ /^conflicts_with:[[:space:]]*\[[^][]+\][[:space:]]*$/) {
+          value = $0
+          sub(/^conflicts_with:[[:space:]]*/, "", value)
+          gsub(/^[[:space:]]*\[[[:space:]]*/, "", value)
+          gsub(/[[:space:]]*\][[:space:]]*$/, "", value)
+          item_count = split(value, items, ",")
+          for (i = 1; i <= item_count; i++) {
+            add_conflict(items[i])
+          }
+          in_conflicts = 0
+          next
+        }
+
+        if ($0 ~ /^conflicts_with:[[:space:]]*$/) {
+          in_conflicts = 1
+          next
+        }
+
+        if (in_conflicts && $0 ~ /^[[:space:]]*-[[:space:]]*.+/) {
+          value = $0
+          sub(/^[[:space:]]*-[[:space:]]*/, "", value)
+          add_conflict(value)
+          next
+        }
+      }
+
+      END {
+        flush_record()
+      }
+    ' \
+    | awk -F '\t' '
+      {
+        n++
+        ids[n] = $1
+        subjects[$1] = $2
+        values[$1] = $3
+        item_count = split($4, items, ",")
+        for (i = 1; i <= item_count; i++) {
+          conflicts[$1, items[i]] = 1
+        }
+      }
+
+      END {
+        count = 0
+        for (i = 1; i <= n; i++) {
+          for (j = i + 1; j <= n; j++) {
+            left = ids[i]
+            right = ids[j]
+            if (subjects[left] == subjects[right] && values[left] != values[right] && conflicts[left, right] && conflicts[right, left]) {
+              count++
+            }
+          }
+        }
+        print count + 0
+      }
+    '
+}
+
+check_conflict_fixture() {
+  local sandbox="${ROOT_DIR}/.self-harness/tmp/memory-evaluation-conflict-fixture-main"
+  local actual
+
+  rm -rf "$sandbox"
+  mkdir -p "${sandbox}/memory/lessons"
+
+  cat >"${sandbox}/memory/lessons/conflict-a.md" <<'EOF'
+---
+id: "memory-conflict-fixture-a"
+title: "Memory Conflict Fixture A"
+type: "memory"
+status: "active"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+tags:
+  - fixture
+  - memory
+  - conflict
+summary: "Fixture evidence that preserves one side of a contradiction."
+conflict_fixture: "memory-evaluation-conflict"
+conflict_subject: "fixture-claim"
+conflict_value: "alpha"
+conflicts_with:
+  - "memory-conflict-fixture-b"
+---
+
+# Memory Conflict Fixture A
+
+This scratch note represents one evidence record.
+EOF
+
+  cat >"${sandbox}/memory/lessons/conflict-b.md" <<'EOF'
+---
+id: "memory-conflict-fixture-b"
+title: "Memory Conflict Fixture B"
+type: "memory"
+status: "active"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+tags:
+  - fixture
+  - memory
+  - conflict
+summary: "Fixture evidence that preserves the other side of a contradiction."
+conflict_fixture: "memory-evaluation-conflict"
+conflict_subject: "fixture-claim"
+conflict_value: "beta"
+conflicts_with:
+  - "memory-conflict-fixture-a"
+---
+
+# Memory Conflict Fixture B
+
+This scratch note represents the conflicting evidence record.
+EOF
+
+  actual="$(MEMORY_EVALUATION_ROOT_DIR="$sandbox" bash "${SCRIPT_DIR}/memory-evaluation-check.sh" --count-contradiction-fixtures)"
+  [ "$actual" = "1" ]
+}
+
 main() {
   local missing=0
   local failures=0
@@ -208,7 +422,13 @@ main() {
     score "warn" "freshness" "no memory supersedes links are declared in frontmatter"
   fi
 
-  score "warn" "conflict-handling" "repository preserves contradictory notes append-only, but no deterministic contradiction fixture exists"
+  if check_conflict_fixture; then
+    score "pass" "conflict-handling" "contradiction fixture preserves two independent memory evidence records with reciprocal conflict links"
+  else
+    score "fail" "conflict-handling" "deterministic contradiction fixture did not validate"
+    failures=$((failures + 1))
+  fi
+
   score "pass" "portability" "checked evidence paths are repository-relative"
   score "pass" "compression" "evaluation records summarize probes without copying session transcripts"
 
@@ -218,6 +438,17 @@ main() {
 case "${1:-}" in
   --count-supersedes-links)
     count_supersedes_links
+    ;;
+  --count-contradiction-fixtures)
+    count_contradiction_fixtures
+    ;;
+  --check-conflict-fixture)
+    if check_conflict_fixture; then
+      echo "memory-evaluation-check: conflict fixture ok"
+    else
+      echo "memory-evaluation-check: conflict fixture failed" >&2
+      exit 1
+    fi
     ;;
   *)
     main "$@"

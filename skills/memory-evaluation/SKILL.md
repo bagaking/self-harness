@@ -14,6 +14,7 @@ Use this skill to keep `memory/` useful under repeated sessions. It turns long i
 1. State the focused memory question in one sentence.
 2. Retrieve evidence with `scripts/query-docs.sh memory <topic>` and, when needed, `scripts/query-docs.sh mailbox <topic>` or `scripts/query-docs.sh all <topic>`.
 3. When the task asks for a concrete memory-system evaluation, run `scripts/memory-evaluation-check.sh` after reading context. Treat `warn` scores as judgment pressure, not automatic permission to rewrite search or memory policy.
+   - For conflict-handling evaluator work, run `scripts/memory-evaluation-conflict-fixture-check.sh`. Synthetic contradiction evidence belongs under `.self-harness/tmp/`; do not create durable contradictory memory notes just to satisfy the checker.
 4. Read only the relevant full files. Treat old memory as evidence, not law.
 5. Classify each candidate claim as decision, lesson, proposal, incident, diary context, or mailbox context.
 6. Apply the checklist below with `pass`, `warn`, or `fail` notes.
