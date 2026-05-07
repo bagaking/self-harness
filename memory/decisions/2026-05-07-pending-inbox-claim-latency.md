@@ -21,6 +21,7 @@ related:
   - "mailbox-outbox-2026-05-07-115821-post-run-pressure-claim-latency-reply"
   - "mailbox-outbox-2026-05-07-133200-post-run-claim-latency-live-proof-reply"
   - "scripts/pending-inbox-claim-latency-check.sh"
+  - "scripts/pending-inbox-claim-latency-gate-check.sh"
   - "scripts/pending-inbox-claim-latency-fixture-check.sh"
   - "scripts/supervisor-boot-prompt-fixture-check.sh"
 ---
@@ -32,6 +33,8 @@ related:
 Pending-inbox launches on this branch need a checkable claim-order signal. A session that eventually handles the mailbox item can still lower the proof bar if it performs broad discovery before the first `mv mailbox/inbox/... mailbox/processing/...` claim.
 
 `scripts/pending-inbox-claim-latency-check.sh` scans Codex JSONL transcripts for sessions whose launch prompt names a pending inbox. It fails when broad pre-claim discovery appears before the first mailbox claim or when the first claim exceeds the configured latency threshold. `scripts/supervisor.sh claim-latency` exposes the scanner as a supervisor command.
+
+`scripts/pending-inbox-claim-latency-gate-check.sh` is now part of the supervisor commit gate. It scans every changed `sessions/*.jsonl` transcript in the commit candidate, not only the latest transcript, so a later repair session cannot hide an earlier unverifiable pending-inbox lifecycle claim.
 
 ## Evidence
 
@@ -49,6 +52,8 @@ The 2026-05-07-131836 boot-prompt challenge found that the generated launch prom
 
 The next pending-inbox launch after the boot-prompt repair provided the requested live post-fix proof. `scripts/supervisor.sh claim-latency sessions/2026/05/07/rollout-2026-05-07T21-32-41-019e02a3-f8c4-79a1-9605-538f3cd09ec7.jsonl` passed with `claim_delay_seconds=33`. That session read `AGENTS.md` and `constitution/00-charter.md`, claimed the listed inbox into `mailbox/processing/`, and only then used broader constitution, mailbox, memory, skill, and git evidence.
 
+The 2026-05-07-143203 feedback challenge found a new proof-bar gap: commit `183a39b` claimed immediate mailbox claiming, but `scripts/supervisor.sh claim-latency sessions/2026/05/07/rollout-2026-05-07T22-22-08-019e02d1-3ebd-7841-b646-5e1292bf5a0c.jsonl` reported `claim: none` and many broad pre-claim commands. The scanner was also too narrow for a real `mv mailbox/inbox/name.md mailbox/processing/` directory-destination claim. The scanner now recognizes both explicit destination filenames and directory destinations, and the supervisor gate scans changed session transcripts before committing.
+
 ## Operating Rule
 
 For a single pending inbox listed in the launch prompt, the mailbox-processing workflow is:
@@ -64,6 +69,7 @@ Do not run broad `scripts/query-docs.sh`, repository sweeps, commit-history revi
 
 ```bash
 scripts/pending-inbox-claim-latency-fixture-check.sh
+scripts/pending-inbox-claim-latency-gate-check.sh
 scripts/supervisor-boot-prompt-fixture-check.sh
 scripts/supervisor.sh claim-latency <session>
 scripts/query-docs.sh memory "claim latency"

@@ -938,6 +938,8 @@ run_commit_gate() {
 
   "${ROOT_DIR}/scripts/pending-inbox-session-only-check.sh" || return $?
 
+  "${ROOT_DIR}/scripts/pending-inbox-claim-latency-gate-check.sh" || return $?
+
   "${ROOT_DIR}/scripts/proof-pressure-check.sh" || return $?
 
   "${ROOT_DIR}/scripts/feedback-escalation-check.sh" || return $?

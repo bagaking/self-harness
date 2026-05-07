@@ -112,7 +112,7 @@ function_call_rows() {
 
 is_claim_command() {
   local cmd="$1"
-  LC_ALL=C rg -q '(^|[;&|[:space:]])mv[[:space:]]+mailbox/inbox/[^[:space:]]+\.md[[:space:]]+mailbox/processing/[^[:space:]]+\.md' <<<"$cmd"
+  LC_ALL=C rg -q '(^|[;&|[:space:]])mv[[:space:]]+mailbox/inbox/[^[:space:]]+\.md[[:space:]]+mailbox/processing(/[^[:space:]]+\.md|/)?([;&|[:space:]]|$)' <<<"$cmd"
 }
 
 is_broad_preclaim_command() {

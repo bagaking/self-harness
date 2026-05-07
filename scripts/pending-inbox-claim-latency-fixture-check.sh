@@ -21,7 +21,21 @@ prepare_sandbox() {
   mkdir -p "${sandbox}/scripts" "${sandbox}/sessions"
 
   cp "${ROOT_DIR}/scripts/pending-inbox-claim-latency-check.sh" "${sandbox}/scripts/"
+  cp "${ROOT_DIR}/scripts/pending-inbox-claim-latency-gate-check.sh" "${sandbox}/scripts/"
   chmod +x "${sandbox}/scripts/pending-inbox-claim-latency-check.sh"
+  chmod +x "${sandbox}/scripts/pending-inbox-claim-latency-gate-check.sh"
+}
+
+prepare_gate_sandbox() {
+  local sandbox="$1"
+
+  prepare_sandbox "$sandbox"
+  git -C "$sandbox" init -q
+  git -C "$sandbox" checkout -q -b agent/pending-inbox-claim-latency-gate
+  git -C "$sandbox" config user.name "Self Harness Fixture"
+  git -C "$sandbox" config user.email "self-harness-fixture@example.invalid"
+  git -C "$sandbox" add -- scripts
+  git -C "$sandbox" commit -q -m "fixture: initial claim-latency gate sandbox"
 }
 
 write_delayed_claim_session() {
@@ -44,7 +58,7 @@ write_claim_first_session() {
 {"timestamp":"2026-05-07T00:00:00.100Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Pending mailbox before launch:\n- mailbox/inbox/pending-task.md\n\nMailbox priority:\n- After reading AGENTS.md and constitution/00-charter.md, inspect the listed pending inbox before any broad repository sweep."}]}}
 {"timestamp":"2026-05-07T00:00:03.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n '1,220p' AGENTS.md\"}"}}
 {"timestamp":"2026-05-07T00:00:06.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n '1,260p' constitution/00-charter.md\"}"}}
-{"timestamp":"2026-05-07T00:00:11.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"mv mailbox/inbox/pending-task.md mailbox/processing/pending-task.md\"}"}}
+{"timestamp":"2026-05-07T00:00:11.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"mv mailbox/inbox/pending-task.md mailbox/processing/\"}"}}
 {"timestamp":"2026-05-07T00:00:20.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"scripts/query-docs.sh mailbox feedback\"}"}}
 EOF
 }
@@ -131,12 +145,67 @@ check_skips_no_pending_prompt() {
   log "skips sessions without pending inbox launch"
 }
 
+run_gate() {
+  local sandbox="$1"
+  local log_file="$2"
+  set +e
+  (
+    cd "$sandbox"
+    bash scripts/pending-inbox-claim-latency-gate-check.sh
+  ) >"$log_file" 2>&1
+  local status=$?
+  set -e
+  return "$status"
+}
+
+check_gate_rejects_changed_delayed_session() {
+  local sandbox log_file session status
+  sandbox="${WORK_DIR}/gate-delayed"
+  log_file="${WORK_DIR}/gate-delayed.log"
+  session="${sandbox}/sessions/delayed.jsonl"
+  prepare_gate_sandbox "$sandbox"
+  write_delayed_claim_session "$session"
+
+  if run_gate "$sandbox" "$log_file"; then
+    status=0
+  else
+    status=$?
+  fi
+  [ "$status" -eq 1 ] || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "gate delayed session returned ${status}, expected 1"
+  }
+  rg -q 'pending-inbox-claim-latency-check: FAIL sessions/delayed.jsonl' "$log_file" || fail "gate delayed session did not scan the changed transcript"
+  rg -q 'broad pre-claim commands:' "$log_file" || fail "gate delayed session did not report broad pre-claim commands"
+
+  log "gate rejects changed delayed pending inbox transcript"
+}
+
+check_gate_allows_changed_claim_first_session() {
+  local sandbox log_file session
+  sandbox="${WORK_DIR}/gate-claim-first"
+  log_file="${WORK_DIR}/gate-claim-first.log"
+  session="${sandbox}/sessions/claim-first.jsonl"
+  prepare_gate_sandbox "$sandbox"
+  write_claim_first_session "$session"
+
+  run_gate "$sandbox" "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "gate claim-first session should pass"
+  }
+  rg -q 'pending-inbox-claim-latency-check: ok .*claim_delay_seconds=11' "$log_file" || fail "gate claim-first session did not report the expected claim delay"
+
+  log "gate allows changed claim-first pending inbox transcript"
+}
+
 main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
   check_rejects_delayed_broad_claim
   check_allows_claim_first
   check_skips_no_pending_prompt
+  check_gate_rejects_changed_delayed_session
+  check_gate_allows_changed_claim_first_session
   log "ok"
 }
 
