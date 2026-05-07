@@ -628,15 +628,15 @@ run_commit_gate() {
     return 1
   fi
 
-  check_portable_content
+  check_portable_content || return $?
 
-  "${ROOT_DIR}/scripts/proof-pressure-check.sh"
+  "${ROOT_DIR}/scripts/proof-pressure-check.sh" || return $?
 
-  "${ROOT_DIR}/scripts/feedback-escalation-check.sh"
+  "${ROOT_DIR}/scripts/feedback-escalation-check.sh" || return $?
 
-  "${ROOT_DIR}/scripts/docs-check.sh"
+  "${ROOT_DIR}/scripts/docs-check.sh" || return $?
 
-  "${ROOT_DIR}/scripts/shell-syntax-check.sh"
+  "${ROOT_DIR}/scripts/shell-syntax-check.sh" || return $?
 }
 
 commit_changes() {
@@ -681,7 +681,7 @@ commit_changes() {
     esac
   done
 
-  run_commit_gate "$allow_constitution"
+  run_commit_gate "$allow_constitution" || return $?
 
   if ! has_git_changes; then
     log "commit: no changes"

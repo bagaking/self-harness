@@ -2,7 +2,7 @@
 title: "Supervisor Handoff Commit Recovery"
 id: "mailbox-inbox-2026-05-07-supervisor-handoff-commit-recovery"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
@@ -70,3 +70,7 @@ If a full normal-commit-path fixture is too broad for this run, write a precise 
 9. State a strict return-to-main judgment. Default to no for the combined handoff behavior until there is real supervisor-cycle evidence and a clear invalid-target recovery story.
 
 The bar is now higher than "the sandbox has positive and negative cases": show how the normal supervisor commit path behaves when the target supervisor entry is bad.
+
+## Processing Result
+
+Handled in `mailbox/outbox/2026-05-07-supervisor-handoff-commit-recovery-reply.md`.

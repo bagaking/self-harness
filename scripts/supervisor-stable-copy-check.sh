@@ -92,13 +92,95 @@ prepare_common_sandbox() {
   local sandbox="$1"
   rm -rf "$sandbox"
   mkdir -p \
+    "${sandbox}/constitution" \
     "${sandbox}/scripts" \
     "${sandbox}/mailbox/inbox" \
     "${sandbox}/memory/diary" \
     "${sandbox}/bin"
 
+  cp "${ROOT_DIR}/constitution/"*.md "${sandbox}/constitution/"
   cp "${ROOT_DIR}/scripts/supervisor.sh" "${sandbox}/scripts/supervisor.sh"
   cp "${ROOT_DIR}/scripts/init.sh" "${sandbox}/scripts/init.sh"
+  cp "${ROOT_DIR}/scripts/docs-check.sh" "${sandbox}/scripts/docs-check.sh"
+  cp "${ROOT_DIR}/scripts/feedback-escalation-check.sh" "${sandbox}/scripts/feedback-escalation-check.sh"
+  cp "${ROOT_DIR}/scripts/proof-pressure-check.sh" "${sandbox}/scripts/proof-pressure-check.sh"
+  cp "${ROOT_DIR}/scripts/shell-syntax-check.sh" "${sandbox}/scripts/shell-syntax-check.sh"
+}
+
+write_frontmatter_mailbox_message() {
+  local file="$1"
+  local id="$2"
+  {
+    printf '%s\n' '---'
+    printf 'id: "%s"\n' "mailbox-inbox-${id}"
+    printf '%s\n' 'title: "Stable Copy Fixture Message"'
+    printf '%s\n' 'type: "mailbox-message"'
+    printf '%s\n' 'status: "pending"'
+    printf '%s\n' 'owner: "agent"'
+    printf '%s\n' 'created: "2026-05-07"'
+    printf '%s\n' 'updated: "2026-05-07"'
+    printf '%s\n' 'tags:'
+    printf '%s\n' '  - mailbox'
+    printf '%s\n' 'summary: "Scratch mailbox input for stable-copy proof fixtures."'
+    printf '%s\n' '---'
+    printf '%s\n' ''
+    printf '%s\n' '# Stable Copy Fixture Message'
+  } >"$file"
+}
+
+write_fake_commit_path_git() {
+  local dir="$1"
+  mkdir -p "$dir"
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    printf '%s\n' 'if [ "${1:-}" = "-C" ]; then'
+    printf '%s\n' '  shift 2'
+    printf '%s\n' 'fi'
+    printf '%s\n' 'case "$*" in'
+    printf '%s\n' '  "branch --show-current")'
+    printf '%s\n' '    echo "agent/stable-copy-check"'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "log --format=%s -n 12")'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "diff --quiet -- constitution/")'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "diff --cached --quiet -- constitution/")'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "ls-files --others --exclude-standard -- constitution/")'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "diff --name-only")'
+    printf '%s\n' '    echo "scripts/supervisor.sh"'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "diff --name-only --diff-filter=ACMR")'
+    printf '%s\n' '    echo "scripts/supervisor.sh"'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "diff --cached --name-only")'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "diff --cached --name-only --diff-filter=ACMR")'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "ls-files --others --exclude-standard")'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  "status --porcelain --untracked-files=all")'
+    printf '%s\n' '    echo " M scripts/supervisor.sh"'
+    printf '%s\n' '    exit 0'
+    printf '%s\n' '    ;;'
+    printf '%s\n' '  *)'
+    printf '%s\n' '    echo "unexpected fake git command: $*" >&2'
+    printf '%s\n' '    exit 2'
+    printf '%s\n' '    ;;'
+    printf '%s\n' 'esac'
+  } >"${dir}/git"
+  chmod +x "${dir}/git"
 }
 
 run_with_timeout() {
@@ -255,7 +337,7 @@ check_loop_blocks_invalid_source_change() {
   log_file="${WORK_DIR}/loop-invalid-source-change.log"
   prepare_common_sandbox "$sandbox"
   write_fake_codex "${sandbox}/bin" invalid
-  printf '%s\n' 'pending stable-copy invalid loop handoff proof' >"${sandbox}/mailbox/inbox/pending-loop-invalid-handoff-proof.md"
+  write_frontmatter_mailbox_message "${sandbox}/mailbox/inbox/pending-loop-invalid-handoff-proof.md" "pending-loop-invalid-handoff-proof"
 
   set +e
   (
@@ -299,12 +381,89 @@ check_loop_blocks_invalid_source_change() {
   log "loop blocked handoff after invalid supervisor source change"
 }
 
+check_loop_commit_path_rejects_invalid_source_change() {
+  local sandbox log_file status
+  sandbox="${WORK_DIR}/loop-invalid-source-change-normal-commit"
+  log_file="${WORK_DIR}/loop-invalid-source-change-normal-commit.log"
+  prepare_common_sandbox "$sandbox"
+  write_fake_codex "${sandbox}/bin" invalid
+  write_fake_commit_path_git "${sandbox}/bin"
+  write_frontmatter_mailbox_message "${sandbox}/mailbox/inbox/pending-loop-invalid-normal-commit-proof.md" "pending-loop-invalid-normal-commit-proof"
+
+  set +e
+  (
+    cd "$sandbox"
+    run_with_timeout 20 env \
+      PATH="${sandbox}/bin:${PATH}" \
+      SELF_HARNESS_AUTO_CHALLENGE=0 \
+      SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS=0 \
+      SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS=0 \
+      SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS=1 \
+      SELF_HARNESS_INTERVAL_SECONDS=60 \
+      bash scripts/supervisor.sh loop
+  ) >"$log_file" 2>&1
+  status=$?
+  set -e
+
+  if [ "$status" -ne 124 ]; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "invalid normal-commit loop returned ${status}; expected timeout with stable copy still in control"
+  fi
+
+  if ! rg -q 'post-run commit gate failed; asking Codex session for one repair attempt' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "normal commit path did not invoke the commit-gate repair path"
+  fi
+
+  if ! rg -q 'shell-syntax-check: failed scripts/supervisor.sh' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "normal commit path did not detect the invalid checked-out supervisor through shell syntax validation"
+  fi
+
+  if rg -q 'unexpected fake git command: add ' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "normal commit path staged changes after the gate rejected invalid supervisor syntax"
+  fi
+
+  if rg -q 'unexpected fake git command: commit ' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "normal commit path attempted a commit after the gate rejected invalid supervisor syntax"
+  fi
+
+  if ! rg -q 'post-run commit failed' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "run did not report the failed post-run commit after invalid supervisor syntax"
+  fi
+
+  if ! rg -q 'supervisor source changed during stable-copy loop but failed readiness check; keeping stable copy in control' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "loop did not report blocked handoff after normal commit-path failure"
+  fi
+
+  if rg -q 'passed readiness check; exiting' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "normal commit path treated invalid checked-out supervisor as a safe handoff"
+  fi
+
+  if rg -q 'unexpected fake git command' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "normal commit fixture did not cover the supervisor git command surface"
+  fi
+
+  if bash -n "${sandbox}/scripts/supervisor.sh" 2>/dev/null; then
+    fail "normal commit fixture did not leave a syntactically invalid checked-out supervisor"
+  fi
+
+  log "normal commit path rejected invalid supervisor source before safe handoff"
+}
+
 main() {
   mkdir -p "$WORK_DIR"
   check_self_modified_once_survives
   check_idle_once_skips_launch
   check_loop_handoff_with_valid_source_change
   check_loop_blocks_invalid_source_change
+  check_loop_commit_path_rejects_invalid_source_change
   log "ok"
 }
 
