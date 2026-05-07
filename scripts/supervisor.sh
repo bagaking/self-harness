@@ -485,12 +485,18 @@ check_portable_content() {
   fi
 }
 
+constitution_changes_present() {
+  ! git -C "$ROOT_DIR" diff --quiet -- constitution/ && return 0
+  ! git -C "$ROOT_DIR" diff --cached --quiet -- constitution/ && return 0
+  git -C "$ROOT_DIR" ls-files --others --exclude-standard -- constitution/ | rg -q .
+}
+
 run_commit_gate() {
   local allow_constitution="${1:-0}"
   init_layout
 
-  if [ "$allow_constitution" != "1" ] && ! git -C "$ROOT_DIR" diff --quiet -- constitution/; then
-    echo "commit gate failed: constitution/ has unstaged changes" >&2
+  if [ "$allow_constitution" != "1" ] && constitution_changes_present; then
+    echo "commit gate failed: constitution/ has staged, unstaged, or untracked changes" >&2
     return 1
   fi
 
