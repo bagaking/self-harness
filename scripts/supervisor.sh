@@ -745,6 +745,8 @@ run_commit_gate() {
 
   check_portable_content || return $?
 
+  "${ROOT_DIR}/scripts/pending-inbox-session-only-check.sh" || return $?
+
   "${ROOT_DIR}/scripts/proof-pressure-check.sh" || return $?
 
   "${ROOT_DIR}/scripts/feedback-escalation-check.sh" || return $?
