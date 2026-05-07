@@ -235,6 +235,10 @@ recent_low_value_subjects() {
     || true
 }
 
+has_recent_low_value_feedback() {
+  [ "$(recent_low_value_subjects | wc -l | tr -d '[:space:]')" -ge 2 ]
+}
+
 write_progressive_challenge() {
   local id="$1"
   local branch="$2"
@@ -299,6 +303,11 @@ seed_progressive_challenge_if_needed() {
 
   if [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=all)" ]; then
     log "progressive challenge skipped: worktree has existing changes"
+    return 0
+  fi
+
+  if ! has_recent_low_value_feedback; then
+    log "progressive challenge skipped: no repeated low-value branch feedback"
     return 0
   fi
 
