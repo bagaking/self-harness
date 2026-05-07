@@ -24,12 +24,14 @@ DEFAULT_RESUME_MAX_AGE_SECONDS=21600
 DEFAULT_RESUME_MAX_BYTES=600000
 DEFAULT_CODEX_MAX_RUNTIME_SECONDS=1800
 DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS=300
+DEFAULT_AUTO_CHALLENGE=1
 
 INTERVAL_SECONDS="${SELF_HARNESS_INTERVAL_SECONDS:-$DEFAULT_INTERVAL_SECONDS}"
 RESUME_MAX_AGE_SECONDS="${SELF_HARNESS_RESUME_MAX_AGE_SECONDS:-$DEFAULT_RESUME_MAX_AGE_SECONDS}"
 RESUME_MAX_BYTES="${SELF_HARNESS_RESUME_MAX_BYTES:-$DEFAULT_RESUME_MAX_BYTES}"
 CODEX_MAX_RUNTIME_SECONDS="${SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS:-$DEFAULT_CODEX_MAX_RUNTIME_SECONDS}"
 CODEX_IDLE_TIMEOUT_SECONDS="${SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS:-$DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS}"
+AUTO_CHALLENGE="${SELF_HARNESS_AUTO_CHALLENGE:-$DEFAULT_AUTO_CHALLENGE}"
 
 usage() {
   cat <<'EOF'
@@ -48,6 +50,7 @@ Environment:
   SELF_HARNESS_RESUME_MAX_BYTES       Latest-session size limit. Default: 600000.
   SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS Max seconds for one Codex child. Default: 1800.
   SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS Max seconds without session/log output. Default: 300.
+  SELF_HARNESS_AUTO_CHALLENGE     Set to 0 to skip automatic progressive challenges on idle agent branches.
   SELF_HARNESS_CODEX_ARGS             Extra args passed to codex exec/resume.
   SELF_HARNESS_SKIP_COMMIT            Set to 1 to skip post-run commits.
 EOF
@@ -205,6 +208,108 @@ choose_mode() {
   fi
 }
 
+current_branch() {
+  git -C "$ROOT_DIR" branch --show-current 2>/dev/null || true
+}
+
+is_agent_branch() {
+  case "$(current_branch)" in
+    agent/*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+has_pending_inbox() {
+  find "${ROOT_DIR}/mailbox/inbox" -maxdepth 1 -type f ! -name .gitkeep 2>/dev/null \
+    | rg -q .
+}
+
+recent_low_value_subjects() {
+  git -C "$ROOT_DIR" log --format=%s -n 12 2>/dev/null \
+    | rg -i '^(run: (record self-harness state|new mode|new session no pending|new run state)|run: .*?(no pending|mailbox sweep|state mailbox|repository state|repository inspection))' \
+    | head -6 \
+    || true
+}
+
+write_progressive_challenge() {
+  local id="$1"
+  local branch="$2"
+  local date_value="$3"
+  local file="${ROOT_DIR}/mailbox/inbox/${id}.md"
+  local recent
+  recent="$(recent_low_value_subjects | sed 's/^/- /')"
+  if [ -z "$recent" ]; then
+    recent="- No explicit next inbox task exists; the supervisor must turn idle time into a harder question instead of another passive sweep."
+  fi
+
+  cat >"$file" <<EOF
+---
+title: "Progressive Supervisor Challenge"
+id: "mailbox-inbox-${id}"
+type: "mailbox-inbox"
+status: "pending"
+owner: "supervisor"
+created: "${date_value}"
+updated: "${date_value}"
+from: "supervisor"
+to: "${branch}"
+message_id: "${id}"
+tags:
+  - supervisor
+  - progressive-challenge
+  - self-improvement
+  - evaluation
+summary: "Asks the branch agent to turn idle loop feedback into a harder, evidence-seeking self-improvement task."
+---
+
+# Progressive Supervisor Challenge
+
+The supervisor generated this because no pending inbox message was available. A passive run would likely produce another broad state sweep or stop at a low-demand status report, which is not enough progress.
+
+Feedback signal:
+
+${recent}
+
+## Task
+
+Use the recent passive-loop feedback to raise the bar for yourself.
+
+1. Review the last five branch commits and the last two mailbox outbox reports.
+2. Identify one concrete weakness, bottleneck, or missing proof in the current branch.
+3. Produce one small, evidence-backed improvement or refusal:
+   - a deterministic check under `scripts/` if the behavior is stable enough to automate;
+   - a focused skill refinement if a repeated procedure is clear;
+   - a memory lesson or decision with a rerunnable query probe;
+   - or a proposal explaining why no durable change should be made yet.
+4. Record acceptance criteria and the exact evidence a future supervisor can rerun.
+5. State whether anything is a return-to-main candidate under the strict family-genome standard. Default to no unless proof is unusually strong.
+
+Do not make a no-pending mailbox report or generic repository sweep the primary result of this run. Keep scratch work under `.self-harness/tmp/`, keep durable content repository-relative, and run `scripts/docs-check.sh` before finishing.
+EOF
+}
+
+seed_progressive_challenge_if_needed() {
+  [ "$AUTO_CHALLENGE" = "1" ] || return 0
+  is_agent_branch || return 0
+  has_pending_inbox && return 0
+
+  if [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=all)" ]; then
+    log "progressive challenge skipped: worktree has existing changes"
+    return 0
+  fi
+
+  local branch id date_value
+  branch="$(current_branch)"
+  id="$(date -u +"%Y-%m-%d-%H%M%S-progressive-supervisor-challenge")"
+  date_value="$(date -u +"%Y-%m-%d")"
+  write_progressive_challenge "$id" "$branch" "$date_value"
+  log "seeded progressive challenge: mailbox/inbox/${id}.md"
+}
+
 build_boot_prompt() {
   local mode="$1"
   cat <<EOF
@@ -223,6 +328,7 @@ Primary task for this run:
 - Read pending mailbox/inbox messages and produce durable replies or reports under mailbox/outbox.
 - Update memory/ when useful.
 - Improve skills/ only when a reusable procedure is discovered.
+- Treat repeated no-pending or repository-state reports as insufficient progress. If a supervisor challenge is present, handle it instead of writing another broad sweep.
 - Run scripts/docs-check.sh before finishing.
 - If this is a new session, review the repository and write a GFM diary under memory/diary suitable for use as the commit message.
 - Do not run git add or git commit yourself. The supervisor owns staging and committing after this Codex process exits.
@@ -638,6 +744,7 @@ run_with_watchdog() {
 
 run_codex_once() {
   init_layout
+  seed_progressive_challenge_if_needed
   acquire_lock || return 0
   trap release_lock EXIT
 

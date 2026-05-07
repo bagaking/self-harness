@@ -8,7 +8,7 @@ protected: true
 authority: "constitutional"
 mutable_by: "human-only"
 created: "2026-05-05"
-updated: "2026-05-05"
+updated: "2026-05-07"
 tags:
   - operating-model
   - supervisor
@@ -67,6 +67,10 @@ The supervisor must be boring and conservative. It should not try to become an a
 
 Codex produces durable repository state. The supervisor owns staging and committing after the Codex process exits. Codex runs should not call `git add` or `git commit` directly; this keeps `.git/` writes in the deterministic control plane and lets the supervisor include the completed session transcript in the same commit.
 
+The supervisor is still responsible for pressure. A running loop is not progress by itself. When branch feedback shows that the agent is producing low-value sweeps, repeated no-pending mailbox reports, or other passive state records, the supervisor should convert that feedback into a narrower and harder mailbox challenge before launching another run. Good challenges ask for proof, comparison, evaluation, failed-case analysis, or a small reusable improvement; they should not merely ask the agent to inspect the repository again.
+
+If there is no pending inbox message and recent commits are only state sweeps, the supervisor should prefer creating a progressive challenge under `mailbox/inbox/` over letting the next run produce another no-pending report. The challenge must remain branch-local unless a human explicitly changes global rules. The supervisor should record why the next demand is higher than the previous one.
+
 ## Resume Versus New
 
 Resume is preferred only when it is likely to preserve useful context without causing context-window exhaustion. Until an exact parser exists, the supervisor may use conservative heuristics such as session recency, file size, message count, and last known completion status.
@@ -82,6 +86,7 @@ When starting a new session, the boot prompt must require the agent to:
 - Write replies or reports under `mailbox/outbox/`.
 - Update `memory/` when useful.
 - Improve `skills/` only when a reusable procedure is discovered.
+- Treat repeated no-pending or repository-state reports as insufficient progress; if no inbox is pending, explain what harder self-improvement question should be sent to the supervisor rather than manufacturing another broad sweep.
 - Avoid all modifications under `constitution/`.
 - Produce a GFM diary suitable for use as the git commit message.
 - Leave staging and committing to `scripts/supervisor.sh`.
