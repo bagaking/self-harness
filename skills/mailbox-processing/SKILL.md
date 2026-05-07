@@ -51,7 +51,11 @@ scripts/feedback-escalation-check.sh
 
 Run it after the outbox reply and `done/` or `failed/` move are in place, but before the diary and final handoff. If it fails, repair the durable outbox reply or the chosen mechanism before finishing instead of relying on the supervisor commit gate to catch the gap. Use `skills/branch-evolution-evaluation/SKILL.md` for the expected feedback-continuity markers: reviewed evidence, current weakness, mechanism or refusal, anti-noise boundary, verification, return-to-main judgment, and exactly one concrete `Next supervisor pressure:` line or one bounded `No next supervisor pressure:` refusal with a concrete `Supervisor evaluation trigger:` plus `Smaller useful task:` or `Stop condition:`.
 
-7. Before finishing, verify mailbox hygiene:
+7. For post-commit proof challenges, do not claim future `HEAD` evidence.
+
+If an inbox acceptance criterion says a check must pass after commit, run the requested command against the current `HEAD` and report that result. If it fails on already tracked history and repairing that history would modify an existing completed outbox or diary record, do not edit the historical record. Write a focused refusal or next-step report that names the smaller useful task, preserves the failed command output, and states which checks only become meaningful after the supervisor commits the current clean records. You may use `git diff --check` for current working-tree cleanliness, but do not present it as a substitute for a future `git show --check --format=short HEAD`.
+
+8. Before finishing, verify mailbox hygiene:
 
 ```bash
 find mailbox/processing -maxdepth 1 -type f ! -name .gitkeep -print
