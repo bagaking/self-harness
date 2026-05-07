@@ -111,6 +111,7 @@ Usage:
   scripts/supervisor.sh feedback [-F FILE] [--] FEEDBACK...
   scripts/supervisor.sh triggers [--limit N] [--evidence-limit N] [--status all|review|quiet]
   scripts/supervisor.sh claim-latency [--max-seconds N] [SESSION...]
+  scripts/supervisor.sh boot-prompt [MODE]
   scripts/supervisor.sh completed-records
   scripts/supervisor.sh docs-fixture
   scripts/supervisor.sh commit [--allow-constitution] [-m MESSAGE | -F FILE] [-- PATH...]
@@ -709,7 +710,7 @@ You are running inside the self-harness repository.
 
 Mode: ${mode}
 
-Read AGENTS.md first. Then use scripts/query-docs.sh to discover and read relevant constitution documents. Do not modify constitution/.
+Read AGENTS.md first, then read constitution/00-charter.md. Do not modify constitution/. Use scripts/query-docs.sh to discover and read other relevant constitution documents after any single pending-inbox claim required below.
 
 This repository is the agent itself. sessions/, mailbox/, memory/, and skills/ are commit-worthy agent state. Temporary or private work belongs only under .self-harness/.
 
@@ -745,9 +746,10 @@ Pending mailbox before launch:
 ${pending}
 
 Mailbox priority:
-- After reading AGENTS.md and constitution/00-charter.md, inspect the listed pending inbox before any broad repository sweep.
+- After reading AGENTS.md and constitution/00-charter.md, if exactly one pending inbox is listed, claim that file into mailbox/processing/ before scripts/query-docs.sh, repository sweeps, commit-history review, branch-birth reads, memory inspection, or skill inspection.
 - Claim exactly one pending file by moving it from mailbox/inbox/ to mailbox/processing/.
 - If there is only one pending file, claim that file first and handle its acceptance criteria.
+- Only after the claim, run the broader discovery needed for the task.
 - A run with pending inbox that exits without a processing, done, failed, or outbox record is not useful progress.
 EOF
 }
@@ -1856,6 +1858,10 @@ case "${1:-}" in
   claim-latency)
     shift
     check_pending_inbox_claim_latency "$@"
+    ;;
+  boot-prompt)
+    shift
+    build_boot_prompt "${1:-new}"
     ;;
   completed-records)
     shift

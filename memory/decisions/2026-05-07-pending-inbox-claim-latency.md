@@ -21,6 +21,7 @@ related:
   - "mailbox-outbox-2026-05-07-115821-post-run-pressure-claim-latency-reply"
   - "scripts/pending-inbox-claim-latency-check.sh"
   - "scripts/pending-inbox-claim-latency-fixture-check.sh"
+  - "scripts/supervisor-boot-prompt-fixture-check.sh"
 ---
 
 # Pending Inbox Claim Latency
@@ -43,6 +44,8 @@ The current session is live negative evidence. It claimed the inbox after broad 
 
 The next pending-inbox launch after that decision provided live positive evidence. `scripts/supervisor.sh claim-latency sessions/2026/05/07/rollout-2026-05-07T19-58-54-019e024e-1c33-7071-acfd-1d35e4cb6b26.jsonl` passed with `claim_delay_seconds=27`, after the session read `AGENTS.md` and `constitution/00-charter.md` and claimed the listed inbox before broad discovery.
 
+The 2026-05-07-131836 boot-prompt challenge found that the generated launch prompt still told agents to use `scripts/query-docs.sh` before clearly stating the single-pending-inbox exception. `scripts/supervisor-boot-prompt-fixture-check.sh` now proves the generated prompt requires `AGENTS.md`, `constitution/00-charter.md`, claim-first handling for exactly one listed inbox, and only then broader discovery. It also rejects the old query-before-claim wording.
+
 ## Operating Rule
 
 For a single pending inbox listed in the launch prompt, the mailbox-processing workflow is:
@@ -58,6 +61,7 @@ Do not run broad `scripts/query-docs.sh`, repository sweeps, commit-history revi
 
 ```bash
 scripts/pending-inbox-claim-latency-fixture-check.sh
+scripts/supervisor-boot-prompt-fixture-check.sh
 scripts/supervisor.sh claim-latency <session>
 scripts/query-docs.sh memory "claim latency"
 scripts/query-docs.sh skills "claim latency"
@@ -65,4 +69,4 @@ scripts/query-docs.sh skills "claim latency"
 
 ## Return-To-Main
 
-Return-to-main: deferred. The mechanism is portable and focused, and it now has fixture proof plus one live claim-first positive run. Consider a commit-gate promotion only after supervisor review decides that the broad-command vocabulary is stable enough for the shared family, preferably with additional live pending-inbox passes.
+Return-to-main: deferred. The mechanism is portable and focused, and it now has fixture proof, prompt-regression proof, and one live claim-first positive run. The boot-prompt repair is forward-looking rather than restored-discipline evidence. The next pending-inbox session after the prompt fix must pass `scripts/supervisor.sh claim-latency <new-session>` before this branch cites claim-order discipline as restored.
