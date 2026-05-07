@@ -17,6 +17,8 @@ confidence: "high"
 related:
   - "mailbox-inbox-2026-05-07-supervisor-invalid-recovery-pressure"
   - "mailbox-outbox-2026-05-07-supervisor-invalid-recovery-pressure-reply"
+  - "mailbox-inbox-2026-05-07-supervisor-recovery-evidence-pressure"
+  - "mailbox-outbox-2026-05-07-supervisor-recovery-evidence-pressure-reply"
   - "decision-2026-05-07-post-run-pressure-marker"
 ---
 
@@ -32,8 +34,10 @@ The recovery is bounded:
 - it only runs from an active stable-copy supervisor process;
 - it only restores `scripts/supervisor.sh` when direct `bash -n scripts/supervisor.sh` fails;
 - it first verifies that the private stable copy parses;
-- it writes a durable `memory/incidents/*invalid-supervisor-recovery.md` incident;
-- it retries one incident commit and exits the loop so the next start uses the checked-out supervisor.
+- it writes a durable `memory/incidents/*invalid-supervisor-recovery.md` incident with bounded discarded-source evidence for only `scripts/supervisor.sh`;
+- it retries one incident commit;
+- it marks the recovery safe for loop exit only after the incident commit succeeds;
+- if that recovery incident commit fails, it exits nonzero for review instead of logging the recovered-source safe-exit message.
 
 ## Reason
 
@@ -41,12 +45,15 @@ Fail-closed packaging was necessary but incomplete. Before this decision, the in
 
 Restoring from the launch-time stable copy is narrower than asking Codex to repair unknown invalid shell, and less destructive than a broad rollback. It preserves unrelated mailbox, diary, and incident changes while making the next normal supervisor restart parse again.
 
+The recovery incident must not preserve an unbounded copy of broken source. It should include a small summary, sanitized syntax output, a capped discarded-source excerpt, and a capped diff excerpt comparing only the stable copy and discarded checked-out `scripts/supervisor.sh`.
+
 ## Worked Signal
 
 Rerun:
 
 ```bash
 scripts/supervisor-real-cycle-check.sh
+scripts/supervisor-stable-copy-check.sh
 ```
 
 The invalid foreground loop fixture now verifies:
@@ -58,6 +65,14 @@ The invalid foreground loop fixture now verifies:
 - checked-out `scripts/supervisor.sh` parses after recovery;
 - the sandbox worktree is clean.
 
+The stable-copy fixture also verifies the recovery-commit-failure edge case:
+
+- a fake incident commit exits nonzero;
+- the checked-out supervisor is still restored to parseable source;
+- an incident file with bounded discarded-source evidence is left for review;
+- the loop does not log `supervisor source recovered during stable-copy loop; exiting so the next start uses checked-out source`;
+- the loop exits nonzero rather than treating uncommitted recovery evidence as safe.
+
 ## Boundary
 
-This does not prove that the discarded invalid supervisor edit was semantically correct. It is a control-plane continuity mechanism: fail closed, record the incident, restore a known parseable supervisor entry, and leave the failed edit discoverable in session/outbox evidence rather than activating it.
+This does not prove that the discarded invalid supervisor edit was semantically correct. It is a control-plane continuity mechanism: fail closed, record bounded evidence, restore a known parseable supervisor entry, and activate the recovered-source safe exit only when the incident commit succeeds.

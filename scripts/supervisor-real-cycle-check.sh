@@ -408,7 +408,11 @@ check_invalid_loop_recovers_checked_out_source() {
   fi
   invocations="$(wc -l <"${sandbox}/.self-harness/tmp/fake-codex-invocations.log" | tr -d '[:space:]')"
   [ "$invocations" = "2" ] || fail "invalid loop expected exactly one repair attempt, got ${invocations} fake Codex invocations"
-  git -C "$sandbox" show --name-only --format= HEAD | rg -q '^memory/incidents/.*invalid-supervisor-recovery\.md$' || fail "invalid recovery commit did not include a recovery incident"
+  local incident_rel
+  incident_rel="$(git -C "$sandbox" show --name-only --format= HEAD | awk '/^memory\/incidents\/.*invalid-supervisor-recovery\.md$/ { print; exit }')"
+  [ -n "$incident_rel" ] || fail "invalid recovery commit did not include a recovery incident"
+  rg -q 'Discarded Invalid Supervisor Diff' "${sandbox}/${incident_rel}" || fail "invalid recovery incident did not include discarded-source evidence"
+  rg -q 'unterminated real-cycle marker' "${sandbox}/${incident_rel}" || fail "invalid recovery incident did not capture the discarded invalid source excerpt"
   bash -n "${sandbox}/scripts/supervisor.sh" || fail "invalid recovery did not leave checked-out supervisor source valid"
   assert_clean_worktree "$sandbox"
 

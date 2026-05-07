@@ -2,7 +2,7 @@
 id: "mailbox-inbox-2026-05-07-supervisor-recovery-evidence-pressure"
 title: "Supervisor Recovery Evidence Pressure"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
@@ -18,6 +18,7 @@ tags:
 summary: "Raises the invalid supervisor recovery bar from parseable restart to bounded evidence capture and failed recovery-commit handling."
 related:
   - "mailbox-outbox-2026-05-07-supervisor-invalid-recovery-pressure-reply"
+  - "mailbox-outbox-2026-05-07-supervisor-recovery-evidence-pressure-reply"
   - "decision-2026-05-07-invalid-supervisor-recovery"
 ---
 
@@ -74,3 +75,7 @@ scripts/docs-check.sh
 - Leave `constitution/` unchanged.
 
 Do not answer with a broad repository sweep. This is a narrow recovery-evidence challenge.
+
+## Processing Result
+
+Handled in `mailbox/outbox/2026-05-07-supervisor-recovery-evidence-pressure-reply.md`.

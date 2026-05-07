@@ -130,6 +130,7 @@ write_frontmatter_mailbox_message() {
 
 write_fake_commit_path_git() {
   local dir="$1"
+  local recovery_commit_status="${2:-0}"
   mkdir -p "$dir"
   {
     printf '%s\n' '#!/usr/bin/env bash'
@@ -190,7 +191,7 @@ write_fake_commit_path_git() {
     printf '%s\n' '    exit 1'
     printf '%s\n' '    ;;'
     printf '%s\n' '  commit\ -m\ incident:*)'
-    printf '%s\n' '    exit 0'
+    printf '    exit %s\n' "$recovery_commit_status"
     printf '%s\n' '    ;;'
     printf '%s\n' '  *)'
     printf '%s\n' '    echo "unexpected fake git command: $*" >&2'
@@ -447,6 +448,11 @@ check_loop_commit_path_recovers_invalid_source_change() {
     fail "normal commit path did not recover invalid checked-out supervisor source"
   fi
 
+  if ! rg -q 'committed invalid supervisor recovery incident' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "normal commit path did not mark recovery successful after the incident commit"
+  fi
+
   if rg -q 'unexpected fake git command: add ' "$log_file"; then
     sed -n '1,260p' "$log_file" >&2
     fail "normal commit path staged changes through fake git; fixture no longer covers the command surface"
@@ -480,7 +486,79 @@ check_loop_commit_path_recovers_invalid_source_change() {
     fail "normal commit recovery did not write an invalid-supervisor recovery incident"
   fi
 
+  if ! rg -q 'Discarded Invalid Supervisor Diff' "${sandbox}"/memory/incidents/*invalid-supervisor-recovery.md; then
+    fail "normal commit recovery incident did not include bounded discarded-source evidence"
+  fi
+
+  if ! rg -q 'broken quote' "${sandbox}"/memory/incidents/*invalid-supervisor-recovery.md; then
+    fail "normal commit recovery incident did not capture the discarded invalid source excerpt"
+  fi
+
   log "normal commit path recovered invalid supervisor source before safe handoff"
+}
+
+check_loop_recovery_commit_failure_is_not_safe_exit() {
+  local sandbox log_file status
+  sandbox="${WORK_DIR}/loop-recovery-commit-failure"
+  log_file="${WORK_DIR}/loop-recovery-commit-failure.log"
+  prepare_common_sandbox "$sandbox"
+  write_fake_codex "${sandbox}/bin" invalid
+  write_fake_commit_path_git "${sandbox}/bin" 73
+  write_frontmatter_mailbox_message "${sandbox}/mailbox/inbox/pending-recovery-commit-failure-proof.md" "pending-recovery-commit-failure-proof"
+
+  set +e
+  (
+    cd "$sandbox"
+    run_with_timeout 20 env \
+      PATH="${sandbox}/bin:${PATH}" \
+      SELF_HARNESS_AUTO_CHALLENGE=0 \
+      SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS=0 \
+      SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS=0 \
+      SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS=1 \
+      SELF_HARNESS_INTERVAL_SECONDS=60 \
+      bash scripts/supervisor.sh loop
+  ) >"$log_file" 2>&1
+  status=$?
+  set -e
+
+  if [ "$status" -eq 0 ] || [ "$status" -eq 124 ]; then
+    sed -n '1,300p' "$log_file" >&2
+    fail "recovery commit failure loop returned ${status}; expected a bounded nonzero failure"
+  fi
+
+  if ! rg -q 'post-run recovery commit failed' "$log_file"; then
+    sed -n '1,300p' "$log_file" >&2
+    fail "recovery commit failure was not reported"
+  fi
+
+  if ! rg -q 'supervisor source recovery incident commit failed; exiting with failure for review' "$log_file"; then
+    sed -n '1,300p' "$log_file" >&2
+    fail "loop did not fail explicitly after recovery incident commit failure"
+  fi
+
+  if rg -q 'supervisor source recovered during stable-copy loop; exiting so the next start uses checked-out source' "$log_file"; then
+    sed -n '1,300p' "$log_file" >&2
+    fail "loop reported the recovered-source safe exit after the recovery commit failed"
+  fi
+
+  if rg -q 'committed invalid supervisor recovery incident' "$log_file"; then
+    sed -n '1,300p' "$log_file" >&2
+    fail "loop marked recovery committed even though the fake recovery commit failed"
+  fi
+
+  if ! bash -n "${sandbox}/scripts/supervisor.sh" 2>/dev/null; then
+    fail "recovery commit failure should still restore parseable checked-out supervisor source before failing"
+  fi
+
+  if ! find "${sandbox}/memory/incidents" -maxdepth 1 -type f -name '*invalid-supervisor-recovery.md' | rg -q .; then
+    fail "recovery commit failure did not leave an incident file for review"
+  fi
+
+  if ! rg -q 'Discarded Invalid Supervisor Diff' "${sandbox}"/memory/incidents/*invalid-supervisor-recovery.md; then
+    fail "recovery commit failure incident did not include bounded discarded-source evidence"
+  fi
+
+  log "recovery commit failure exits nonzero without recovered-source safe handoff"
 }
 
 main() {
@@ -490,6 +568,7 @@ main() {
   check_loop_handoff_with_valid_source_change
   check_loop_blocks_invalid_source_change
   check_loop_commit_path_recovers_invalid_source_change
+  check_loop_recovery_commit_failure_is_not_safe_exit
   log "ok"
 }
 

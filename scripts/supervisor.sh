@@ -37,6 +37,7 @@ SUPERVISOR_STABLE_COPY_ACTIVE=0
 SUPERVISOR_SOURCE_FINGERPRINT_AT_START=""
 SUPERVISOR_STABLE_SOURCE_PATH=""
 SUPERVISOR_SOURCE_RECOVERED=0
+SUPERVISOR_RECOVERY_COMMIT_FAILED=0
 
 INTERVAL_SECONDS="${SELF_HARNESS_INTERVAL_SECONDS:-$DEFAULT_INTERVAL_SECONDS}"
 RESUME_MAX_AGE_SECONDS="${SELF_HARNESS_RESUME_MAX_AGE_SECONDS:-$DEFAULT_RESUME_MAX_AGE_SECONDS}"
@@ -673,7 +674,19 @@ is_portability_checked_path() {
 
 check_portable_content() {
   local errors=0
-  local file rel
+  local file rel slash users_dir home_dir private_dir tmp_dir var_dir folders_dir quote_chars local_path_pattern temp_path_pattern env_pattern home_rel_pattern
+  slash="/"
+  users_dir="Users"
+  home_dir="home"
+  private_dir="private"
+  tmp_dir="tmp"
+  var_dir="var"
+  folders_dir="folders"
+  quote_chars=$'`\'"'
+  local_path_pattern="(^|[^[:alnum:]_.-])(${slash}${users_dir}|${slash}${home_dir})${slash}[^[:space:]${quote_chars}]+"
+  temp_path_pattern="(^|[^[:alnum:]_.-])(${slash}${private_dir}${slash}${tmp_dir}|${slash}${var_dir}${slash}${folders_dir})${slash}[^[:space:]${quote_chars}]+"
+  env_pattern="(^|[^[:alnum:]_])(HOSTNAME|USER|USERNAME|LOGNAME|HOME)=[^[:space:]${quote_chars}]+"
+  home_rel_pattern="~${slash}(Desktop|Documents|Downloads|Library|Movies|Music|Pictures|proj|Projects|workspace|work)${slash}[^[:space:]${quote_chars}]*"
 
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
@@ -681,19 +694,19 @@ check_portable_content() {
     [ -f "$file" ] || continue
     is_portability_checked_path "$rel" || continue
 
-    if LC_ALL=C rg -n --color never '(^|[^[:alnum:]_.-])(/Users|/home)/[^[:space:]`'"'"'"]+' "$file"; then
+    if LC_ALL=C rg -n --color never "$local_path_pattern" "$file"; then
       errors=$((errors + 1))
     fi
 
-    if LC_ALL=C rg -n --color never '(^|[^[:alnum:]_.-])(/private/tmp|/var/folders)/[^[:space:]`'"'"'"]+' "$file"; then
+    if LC_ALL=C rg -n --color never "$temp_path_pattern" "$file"; then
       errors=$((errors + 1))
     fi
 
-    if LC_ALL=C rg -n --color never '(^|[^[:alnum:]_])(HOSTNAME|USER|USERNAME|LOGNAME|HOME)=[^[:space:]`'"'"'"]+' "$file"; then
+    if LC_ALL=C rg -n --color never "$env_pattern" "$file"; then
       errors=$((errors + 1))
     fi
 
-    if LC_ALL=C rg -n --color never '~/(Desktop|Documents|Downloads|Library|Movies|Music|Pictures|proj|Projects|workspace|work)/[^[:space:]`'"'"'"]*' "$file"; then
+    if LC_ALL=C rg -n --color never "$home_rel_pattern" "$file"; then
       errors=$((errors + 1))
     fi
 
@@ -889,6 +902,8 @@ commit_changes_with_repair() {
 
 write_invalid_supervisor_recovery_incident() {
   local trigger="$1"
+  local stable_source="$2"
+  local invalid_source="$3"
   local date_value id file
 
   date_value="$(date -u +"%Y-%m-%d")"
@@ -917,7 +932,7 @@ summary: "Records a stable-copy recovery that restored invalid checked-out super
 
 ## Summary
 
-The post-run commit path failed while the checked-out `scripts/supervisor.sh` was syntactically invalid. The stable supervisor copy restored `scripts/supervisor.sh` from the launch-time valid copy before retrying a bounded incident commit.
+The post-run commit path failed while the checked-out \`scripts/supervisor.sh\` was syntactically invalid. The stable supervisor copy restored \`scripts/supervisor.sh\` from the launch-time valid copy before retrying a bounded incident commit.
 
 ## Trigger
 
@@ -925,7 +940,7 @@ ${trigger}
 
 ## Recovery Boundary
 
-- Restored path: `scripts/supervisor.sh`
+- Restored path: \`scripts/supervisor.sh\`
 - Source of restored content: the private stable copy created before the Codex child ran
 - Unrelated worktree changes: preserved
 - Constitution changes: not allowed
@@ -933,7 +948,173 @@ ${trigger}
 ## Next Check
 
 Inspect the run's mailbox output, diary, and this incident together. The recovery makes the next normal restart parse the checked-out supervisor again; it does not prove that the discarded invalid supervisor edit was semantically correct.
+
+$(bounded_discarded_supervisor_diff_section "$stable_source" "$invalid_source")
 EOF
+}
+
+sanitize_recovery_evidence() {
+  local slash users_dir home_dir private_dir tmp_dir var_dir folders_dir
+  slash="/"
+  users_dir="Users"
+  home_dir="home"
+  private_dir="private"
+  tmp_dir="tmp"
+  var_dir="var"
+  folders_dir="folders"
+  sed -E \
+    -e "s#(${slash}${users_dir}|${slash}${home_dir})${slash}[^[:space:]]+#[redacted-local-path]#g" \
+    -e "s#(${slash}${private_dir}${slash}${tmp_dir}|${slash}${private_dir}${slash}${var_dir}${slash}${folders_dir}|${slash}${var_dir}${slash}${folders_dir}|${slash}${tmp_dir})${slash}[^[:space:]]+#[redacted-temp-path]#g" \
+    -e 's#(HOSTNAME|USER|USERNAME|LOGNAME|HOME)=[^[:space:]]+#\1=[redacted]#g' \
+    -e "s#~${slash}(Desktop|Documents|Downloads|Library|Movies|Music|Pictures|proj|Projects|workspace|work)${slash}[^[:space:]]*#[redacted-home-path]#g"
+}
+
+bounded_discarded_supervisor_diff_section() {
+  local stable_source="$1"
+  local invalid_source="$2"
+  local max_lines="${SELF_HARNESS_RECOVERY_DIFF_MAX_LINES:-120}"
+  local max_chars="${SELF_HARNESS_RECOVERY_DIFF_MAX_CHARS:-12000}"
+  local head_lines=80
+  local tail_lines=40
+  local stable_lines invalid_lines stable_bytes invalid_bytes syntax_status diff_file total_lines
+
+  stable_lines="$(wc -l <"$stable_source" | tr -d '[:space:]')"
+  invalid_lines="$(wc -l <"$invalid_source" | tr -d '[:space:]')"
+  stable_bytes="$(wc -c <"$stable_source" | tr -d '[:space:]')"
+  invalid_bytes="$(wc -c <"$invalid_source" | tr -d '[:space:]')"
+
+  syntax_status="failed"
+  if bash -n "$invalid_source" >/dev/null 2>&1; then
+    syntax_status="passed"
+  fi
+
+  cat <<EOF
+## Discarded Invalid Supervisor Diff
+
+This bounded evidence compares only \`scripts/supervisor.sh\` from the launch-time stable copy with the discarded invalid checked-out source. It is sanitized for local path patterns and capped at ${max_lines} lines or ${max_chars} characters.
+
+### Summary
+
+- Stable source lines: ${stable_lines}
+- Stable source bytes: ${stable_bytes}
+- Discarded source lines: ${invalid_lines}
+- Discarded source bytes: ${invalid_bytes}
+- Discarded source syntax: ${syntax_status}
+
+### Syntax Output
+
+EOF
+
+  set +e
+  bash -n "$invalid_source" 2>&1 \
+    | sanitize_recovery_evidence \
+    | awk -v max_lines=20 -v max_chars=2000 '
+      {
+        if (lines < max_lines && chars + length($0) + 1 <= max_chars) {
+          print "    " $0
+          lines += 1
+          chars += length($0) + 1
+        } else if (!truncated) {
+          print "    ... [truncated syntax output]"
+          truncated = 1
+        }
+      }
+      END {
+        if (lines == 0) {
+          print "    (no syntax output)"
+        }
+      }
+    '
+  set -e
+
+  cat <<'EOF'
+
+### Discarded Source Excerpt
+
+EOF
+
+  sed -n '1,40p' "$invalid_source" \
+    | sanitize_recovery_evidence \
+    | awk -v max_chars=4000 '
+      {
+        if (chars + length($0) + 1 <= max_chars) {
+          print "    " $0
+          chars += length($0) + 1
+          emitted = 1
+        } else if (!truncated) {
+          print "    ... [truncated discarded source excerpt]"
+          truncated = 1
+        }
+      }
+      END {
+        if (!emitted) {
+          print "    (discarded source was empty)"
+        }
+      }
+    '
+
+  cat <<'EOF'
+
+### Diff Excerpt
+
+EOF
+
+  diff_file="${TMP_DIR}/supervisor-recovery-diff-$$.tmp"
+  set +e
+  diff -u \
+    --label 'scripts/supervisor.sh (launch-time stable copy)' \
+    --label 'scripts/supervisor.sh (discarded invalid source)' \
+    "$stable_source" "$invalid_source" 2>&1 \
+    | sanitize_recovery_evidence \
+    >"$diff_file"
+  set -e
+
+  total_lines="$(wc -l <"$diff_file" | tr -d '[:space:]')"
+  if [ "$total_lines" -le "$max_lines" ]; then
+    awk -v max_chars="$max_chars" '
+      BEGIN {
+        chars = 0
+      }
+      {
+        if (chars + length($0) + 1 <= max_chars) {
+          print "    " $0
+          chars += length($0) + 1
+          emitted = 1
+        } else if (!truncated) {
+          print "    ... [truncated: recovery diff excerpt exceeded " max_chars " characters]"
+          truncated = 1
+        }
+      }
+      END {
+        if (!emitted) {
+          print "    (no textual diff emitted)"
+        }
+      }
+    ' "$diff_file"
+  else
+    {
+      head -n "$head_lines" "$diff_file"
+      printf '... [truncated middle: showing first %s and last %s of %s diff lines]\n' "$head_lines" "$tail_lines" "$total_lines"
+      tail -n "$tail_lines" "$diff_file"
+    } | awk -v max_chars="$max_chars" '
+      {
+        if (chars + length($0) + 1 <= max_chars) {
+          print "    " $0
+          chars += length($0) + 1
+          emitted = 1
+        } else if (!truncated) {
+          print "    ... [truncated: recovery diff excerpt exceeded " max_chars " characters]"
+          truncated = 1
+        }
+      }
+      END {
+        if (!emitted) {
+          print "    (no textual diff emitted)"
+        }
+      }
+    '
+  fi
+  rm -f "$diff_file"
 }
 
 recover_invalid_supervisor_source_after_failed_commit() {
@@ -956,14 +1137,13 @@ recover_invalid_supervisor_source_after_failed_commit() {
     return 1
   fi
 
-  write_invalid_supervisor_recovery_incident "$trigger"
+  write_invalid_supervisor_recovery_incident "$trigger" "$SUPERVISOR_STABLE_SOURCE_PATH" "$source_script"
 
   tmp_script="${TMP_DIR}/supervisor-recovery-$$.sh"
   cp "$SUPERVISOR_STABLE_SOURCE_PATH" "$tmp_script"
   chmod +x "$tmp_script"
   mv "$tmp_script" "$source_script"
 
-  SUPERVISOR_SOURCE_RECOVERED=1
   log "recovered invalid checked-out supervisor source from stable copy"
   return 0
 }
@@ -1250,8 +1430,11 @@ run_codex_once() {
     if ! commit_changes_with_repair; then
       if recover_invalid_supervisor_source_after_failed_commit "post-run commit gate failed after Codex child exit"; then
         if commit_changes -m "incident: recovered invalid supervisor source"; then
+          SUPERVISOR_SOURCE_RECOVERED=1
+          log "committed invalid supervisor recovery incident"
           return 0
         fi
+        SUPERVISOR_RECOVERY_COMMIT_FAILED=1
         log "post-run recovery commit failed"
       fi
       log "post-run commit failed"
@@ -1269,6 +1452,10 @@ run_loop() {
     run_codex_once || status=$?
     if [ "$status" -ne 0 ]; then
       log "run failed with status ${status}"
+    fi
+    if [ "$SUPERVISOR_RECOVERY_COMMIT_FAILED" = "1" ]; then
+      log "supervisor source recovery incident commit failed; exiting with failure for review"
+      return 1
     fi
     if [ "$SUPERVISOR_SOURCE_RECOVERED" = "1" ]; then
       log "supervisor source recovered during stable-copy loop; exiting so the next start uses checked-out source"
