@@ -2,7 +2,7 @@
 title: "Post Run Pressure Challenge"
 id: "mailbox-inbox-2026-05-07-130024-post-run-pressure-challenge"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
