@@ -319,6 +319,14 @@ seed_progressive_challenge_if_needed() {
   log "seeded progressive challenge: mailbox/inbox/${id}.md"
 }
 
+should_skip_idle_agent_launch() {
+  is_agent_branch || return 1
+  has_pending_inbox && return 1
+  has_git_changes && return 1
+  [ -n "$(latest_diary_file || true)" ] || return 1
+  return 0
+}
+
 build_boot_prompt() {
   local mode="$1"
   cat <<EOF
@@ -762,6 +770,12 @@ run_with_watchdog() {
 run_codex_once() {
   init_layout
   seed_progressive_challenge_if_needed
+
+  if should_skip_idle_agent_launch; then
+    log "idle agent run skipped: no pending inbox after challenge seeding"
+    return 0
+  fi
+
   acquire_lock || return 0
   trap release_lock EXIT
 

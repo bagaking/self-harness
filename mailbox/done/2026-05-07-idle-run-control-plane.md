@@ -2,7 +2,7 @@
 title: "Idle Run Control Plane"
 id: "mailbox-inbox-2026-05-07-idle-run-control-plane"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
