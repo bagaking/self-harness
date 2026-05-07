@@ -32,6 +32,7 @@ DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS=300
 DEFAULT_CODEX_WATCHDOG_POLL_SECONDS=10
 DEFAULT_AUTO_CHALLENGE=1
 NEXT_PRESSURE_MARKER_PATTERN='^Next supervisor pressure:[[:space:]]*.'
+STATUS_NOTIFY_DEDUP_FILE="${RUN_DIR}/supervisor-notify-last-key"
 
 SUPERVISOR_STABLE_COPY_ACTIVE=0
 SUPERVISOR_SOURCE_FINGERPRINT_AT_START=""
@@ -130,6 +131,11 @@ Environment:
   SELF_HARNESS_AUTO_CHALLENGE     Set to 0 to skip automatic progressive challenges on idle agent branches.
   SELF_HARNESS_CODEX_ARGS             Extra args passed to codex exec/resume.
   SELF_HARNESS_SKIP_COMMIT            Set to 1 to skip post-run commits.
+  SELF_HARNESS_NOTIFY_CHAT_ID         Optional lark-cli chat recipient for supervisor status.
+  SELF_HARNESS_NOTIFY_USER_ID         Optional lark-cli direct-message recipient for supervisor status.
+  SELF_HARNESS_NOTIFY_AS              lark-cli identity for status sends. Default: bot.
+  SELF_HARNESS_NOTIFY_LARK_BIN        lark-cli binary for status sends. Default: lark-cli.
+  SELF_HARNESS_NOTIFY_DRY_RUN         Set to 1 to dry-run configured lark-cli sends.
 EOF
 }
 
@@ -139,6 +145,38 @@ timestamp() {
 
 log() {
   printf '[%s] %s\n' "$(timestamp)" "$*"
+}
+
+supervisor_notify() {
+  local event="$1"
+  local state="$2"
+  local reason="$3"
+  local body="${4:-}"
+
+  "${ROOT_DIR}/scripts/supervisor-notify.sh" \
+    --event "$event" \
+    --status "$state" \
+    --reason "$reason" \
+    --body "$body" \
+    --branch "$(current_branch)" \
+    >/dev/null 2>&1 \
+    || log "supervisor notify failed: event=${event} status=${state}"
+}
+
+supervisor_notify_once() {
+  local event="$1"
+  local state="$2"
+  local reason="$3"
+  local body="${4:-}"
+  local key
+
+  mkdir -p "$RUN_DIR"
+  key="${event}|${state}|${reason}|$(current_branch)"
+  if [ -f "$STATUS_NOTIFY_DEDUP_FILE" ] && [ "$(cat "$STATUS_NOTIFY_DEDUP_FILE")" = "$key" ]; then
+    return 0
+  fi
+  printf '%s\n' "$key" >"$STATUS_NOTIFY_DEDUP_FILE"
+  supervisor_notify "$event" "$state" "$reason" "$body"
 }
 
 init_layout() {
@@ -1579,6 +1617,11 @@ run_codex_once() {
   printf '%s\n' "$prompt" >"$prompt_file"
 
   log "choice: ${mode}${detail}"
+  if [ "$mode" = "resume" ]; then
+    supervisor_notify_once "resume" "running" "codex child resumed" "choice=${mode}${detail}"
+  else
+    supervisor_notify_once "start" "running" "codex child started" "choice=${mode}${detail}"
+  fi
 
   local extra_args=()
   if [ -n "${SELF_HARNESS_CODEX_ARGS:-}" ]; then
@@ -1616,6 +1659,7 @@ run_codex_once() {
   trap - EXIT
 
   if [ "$status" -ne 0 ]; then
+    supervisor_notify "failure" "failed" "codex child exited nonzero" "status=${status}; mode=${mode}${detail}"
     if [ "${SELF_HARNESS_SKIP_COMMIT:-0}" != "1" ]; then
       commit_failure_state_if_safe "$status" "$mode" "$detail" "$output" || log "failure-state commit failed"
     fi
@@ -1623,8 +1667,13 @@ run_codex_once() {
   fi
 
   if [ "${SELF_HARNESS_SKIP_COMMIT:-0}" != "1" ]; then
+    local had_post_run_changes=0
     seed_post_run_pressure_challenge_if_needed
+    if has_git_changes; then
+      had_post_run_changes=1
+    fi
     if ! commit_changes_with_repair; then
+      supervisor_notify "failure" "failed" "post-run commit failed" "mode=${mode}${detail}"
       if recover_invalid_supervisor_source_after_failed_commit "post-run commit gate failed after Codex child exit"; then
         if commit_changes -m "incident: recovered invalid supervisor source"; then
           SUPERVISOR_SOURCE_RECOVERED=1
@@ -1636,6 +1685,9 @@ run_codex_once() {
       fi
       log "post-run commit failed"
       return 1
+    fi
+    if [ "$had_post_run_changes" -eq 1 ]; then
+      supervisor_notify "progress" "committed" "significant no0 progress committed" "mode=${mode}${detail}"
     fi
   fi
 
@@ -1652,15 +1704,18 @@ run_loop() {
     fi
     if [ "$SUPERVISOR_RECOVERY_COMMIT_FAILED" = "1" ]; then
       log "supervisor source recovery incident commit failed; exiting with failure for review"
+      supervisor_notify "stop" "failed" "foreground loop stopped after supervisor recovery commit failure" "status=1"
       return 1
     fi
     if [ "$SUPERVISOR_SOURCE_RECOVERED" = "1" ]; then
       log "supervisor source recovered during stable-copy loop; exiting so the next start uses checked-out source"
+      supervisor_notify "stop" "paused" "foreground loop stopped after supervisor source recovery" "next start must use checked-out source"
       return 0
     fi
     if stable_supervisor_source_changed; then
       if stable_supervisor_handoff_ready; then
         log "supervisor source changed during stable-copy loop and passed readiness check; exiting so the next start activates the checked-out script"
+        supervisor_notify "stop" "paused" "foreground loop stopped for checked-out supervisor handoff" "readiness=passed"
         return 0
       fi
       log "supervisor source changed during stable-copy loop but failed readiness check; keeping stable copy in control"
@@ -1750,6 +1805,7 @@ start_launchd() {
   if launchd_is_loaded; then
     echo "supervisor already loaded: ${LAUNCHD_LABEL}"
     echo "log: $LOOP_LOG"
+    supervisor_notify_once "start" "running" "start requested while launchd supervisor was already loaded"
     return 0
   fi
 
@@ -1765,12 +1821,13 @@ stop_launchd() {
     return 1
   fi
 
-  if launchd_is_loaded; then
-    launchctl bootout "$(launchd_domain)" "$LAUNCHD_PLIST" 2>/dev/null \
-      || launchctl bootout "$(launchd_domain)/${LAUNCHD_LABEL}" 2>/dev/null \
-      || true
-    echo "stopped launchd supervisor: ${LAUNCHD_LABEL}"
-  fi
+  launchd_is_loaded || return 1
+
+  launchctl bootout "$(launchd_domain)" "$LAUNCHD_PLIST" 2>/dev/null \
+    || launchctl bootout "$(launchd_domain)/${LAUNCHD_LABEL}" 2>/dev/null \
+    || true
+  echo "stopped launchd supervisor: ${LAUNCHD_LABEL}"
+  return 0
 }
 
 start_background() {
@@ -1782,6 +1839,7 @@ start_background() {
 
   if [ -f "$PID_FILE" ] && is_pid_alive "$(cat "$PID_FILE")"; then
     echo "supervisor already running: pid=$(cat "$PID_FILE")"
+    supervisor_notify_once "start" "running" "start requested while supervisor was already running"
     return 0
   fi
   nohup "${ROOT_DIR}/scripts/supervisor.sh" loop >>"$LOOP_LOG" 2>&1 &
@@ -1791,11 +1849,17 @@ start_background() {
 }
 
 stop_background() {
-  stop_launchd || true
+  local stopped_launchd=0
+  if stop_launchd; then
+    stopped_launchd=1
+  fi
 
   if [ ! -f "$PID_FILE" ]; then
-    if ! launchd_is_loaded; then
+    if [ "$stopped_launchd" -eq 1 ]; then
+      supervisor_notify_once "stop" "stopped" "stop requested by operator via launchd"
+    elif ! launchd_is_loaded; then
       echo "supervisor is not running"
+      supervisor_notify_once "stop" "stopped" "stop requested but supervisor was not running"
     fi
     return 0
   fi
@@ -1804,8 +1868,10 @@ stop_background() {
   if is_pid_alive "$pid"; then
     kill "$pid"
     echo "stopped supervisor: pid=$pid"
+    supervisor_notify_once "stop" "stopped" "stop requested by operator"
   else
     echo "removing stale pidfile: pid=$pid"
+    supervisor_notify_once "stop" "stopped" "stale pidfile removed"
   fi
   rm -f "$PID_FILE"
 }
