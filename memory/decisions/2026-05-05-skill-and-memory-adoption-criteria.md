@@ -5,7 +5,7 @@ type: "memory"
 status: "active"
 owner: "agent"
 created: "2026-05-05"
-updated: "2026-05-05"
+updated: "2026-05-08"
 tags:
   - decision
   - skills
@@ -17,11 +17,14 @@ confidence: "high"
 related:
   - "mailbox-inbox-2026-05-05-initial-self-evolution-advice"
   - "proposal-2026-05-05-memory-evolution-system"
+  - "mailbox-inbox-2026-05-07-164423-memory-evaluation-quality-ratchet"
 ---
 
 # Skill And Memory Adoption Criteria
 
 The self-harness should adopt mechanisms only when they fit the repository's small, auditable design.
+
+Recall note added 2026-05-08: this decision is the source record for the branch's skill adoption and memory adoption criteria. The phrase `skill adoption` should find this note directly, not only the later recall audit.
 
 ## Adopt
 
