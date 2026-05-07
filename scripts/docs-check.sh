@@ -87,6 +87,19 @@ check_no_constitution_symlinks() {
   done < <(find "$ROOT_DIR/constitution" -type l -print)
 }
 
+check_no_patch_sentinels() {
+  while IFS= read -r file; do
+    local rel="${file#${ROOT_DIR}/}"
+    while IFS= read -r match; do
+      error "${rel}:${match}: patch-editor sentinel line found"
+    done < <(LC_ALL=C rg -n --color never --no-heading '^\*\*\* (Begin|End) Patch$' "$file" || true)
+  done < <(find "$ROOT_DIR" \
+    -path "$ROOT_DIR/.git" -prune -o \
+    -path "$ROOT_DIR/.codex" -prune -o \
+    -path "$ROOT_DIR/.self-harness" -prune -o \
+    -type f -name '*.md' -print)
+}
+
 check_duplicate_ids() {
   local seen_file
   seen_file="$(mktemp)"
@@ -128,6 +141,7 @@ done < <(find "$ROOT_DIR" \
 
 check_no_forbidden_indexes
 check_no_constitution_symlinks
+check_no_patch_sentinels
 check_duplicate_ids
 check_layout
 

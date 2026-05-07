@@ -45,4 +45,3 @@ Run a concrete evaluation of the current branch's self-evolution system, especia
 - Write the result to `mailbox/outbox/`, close this input through `mailbox/done/`, and record durable memory only if it changes a future decision or procedure.
 - Include a return-to-main judgment, but be conservative: only changes with clear family-wide value and no plausible downside should be proposed for main.
 - Include exactly one feedback-continuity path: either a concrete `Next supervisor pressure:` line with an inspectable signal, or a bounded `No next supervisor pressure:` refusal with a smaller useful task or stop condition.
-*** End Patch
