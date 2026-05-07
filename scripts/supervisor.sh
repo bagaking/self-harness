@@ -497,6 +497,8 @@ run_commit_gate() {
 
   check_portable_content
 
+  "${ROOT_DIR}/scripts/proof-pressure-check.sh"
+
   "${ROOT_DIR}/scripts/docs-check.sh"
 
   local script

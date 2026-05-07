@@ -50,6 +50,7 @@ git diff --name-status origin/main..HEAD
 find mailbox/processing -maxdepth 1 -type f ! -name .gitkeep -print
 find .self-harness/tmp -maxdepth 1 -type f \( -name 'outbox-*' -o -name '*.tmp' \) -print
 git diff -- constitution/
+scripts/proof-pressure-check.sh
 scripts/docs-check.sh
 ```
 
