@@ -504,7 +504,18 @@ read_feedback_command_input() {
 }
 
 markdown_quote() {
-  sed 's/^/> /'
+  awk '
+    {
+      line = $0
+      sub(/\r$/, "", line)
+      sub(/[ \t]+$/, "", line)
+      if (line == "") {
+        print ">"
+      } else {
+        print "> " line
+      }
+    }
+  '
 }
 
 text_has_nonspace() {
@@ -985,6 +996,8 @@ run_commit_gate() {
   "${ROOT_DIR}/scripts/run-linked-feedback-map-check.sh" || return $?
 
   "${ROOT_DIR}/scripts/patch-attachment-hygiene-check.sh" || return $?
+
+  "${ROOT_DIR}/scripts/durable-markdown-whitespace-check.sh" || return $?
 
   "${ROOT_DIR}/scripts/docs-check.sh" || return $?
 
@@ -1942,6 +1955,8 @@ case "${1:-}" in
   docs-fixture)
     shift
     check_docs_fixture "$@"
+    ;;
+  __self_harness_source_only)
     ;;
   start)
     start_background
