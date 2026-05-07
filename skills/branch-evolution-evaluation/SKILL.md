@@ -30,6 +30,7 @@ git diff --name-status origin/main..HEAD
    - Identify where the loop still stops too early, lowers the proof bar, or treats a completed mailbox item as the end of pressure.
    - Convert the feedback into one sharper future requirement: a deterministic gate, a skill step, a memory decision with a rerunnable query and trigger, a focused experiment, or a justified refusal with a smaller alternative.
    - State the worked signal a future supervisor can inspect, such as a matching query result, validation command, mailbox acceptance criterion, or next-run behavior.
+   - For feedback-bearing mailbox work, expect `scripts/feedback-escalation-check.sh` to pass before handoff. If escalation would add noise, write the refusal and smaller alternative in the outbox instead of adding a generic challenge.
    - Default return-to-main judgment to `no` for branch-local pressure mechanisms unless evidence shows broad value and no plausible family-wide downside.
 
 4. Classify changes.
@@ -61,6 +62,7 @@ git diff --quiet -- constitution/
 git diff --cached --quiet -- constitution/
 test -z "$(git ls-files --others --exclude-standard -- constitution/)"
 scripts/proof-pressure-check.sh
+scripts/feedback-escalation-check.sh
 scripts/docs-check.sh
 ```
 

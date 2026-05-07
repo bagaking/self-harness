@@ -569,6 +569,8 @@ run_commit_gate() {
 
   "${ROOT_DIR}/scripts/proof-pressure-check.sh"
 
+  "${ROOT_DIR}/scripts/feedback-escalation-check.sh"
+
   "${ROOT_DIR}/scripts/docs-check.sh"
 
   local script
