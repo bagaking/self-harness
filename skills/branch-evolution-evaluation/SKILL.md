@@ -25,13 +25,20 @@ git diff --name-status origin/main..HEAD
    - Read only the full files needed to evaluate the change.
    - Treat `constitution/` as human-owned authority, memory as evidence, mailbox as communication state, skills as reusable procedure, and sessions as transcript state that should not be hand-edited.
 
-3. Classify changes.
+3. Apply the feedback-pressure ratchet when the task includes supervisor feedback, low-value loop feedback, or a request to raise the bar.
+   - Review at least the latest three branch outbox reports and latest three run commits before choosing the response.
+   - Identify where the loop still stops too early, lowers the proof bar, or treats a completed mailbox item as the end of pressure.
+   - Convert the feedback into one sharper future requirement: a deterministic gate, a skill step, a memory decision with a rerunnable query and trigger, a focused experiment, or a justified refusal with a smaller alternative.
+   - State the worked signal a future supervisor can inspect, such as a matching query result, validation command, mailbox acceptance criterion, or next-run behavior.
+   - Default return-to-main judgment to `no` for branch-local pressure mechanisms unless evidence shows broad value and no plausible family-wide downside.
+
+4. Classify changes.
    - Candidate for return-to-main: useful beyond one branch or one session, portable, traceable, validated, and not dependent on private scratch state.
    - Branch-local: identity, diary, mailbox-only conversation state, raw sessions, or intentionally local lineage context.
    - Deferred: plausible but missing evidence, too broad, script-worthy but not stable, or risky without human decision.
    - Reject: noisy, non-portable, duplicate, constitution-modifying by agent, or unsupported by validation.
 
-4. Score criteria as `pass`, `warn`, `fail`, or `not applicable`.
+5. Score criteria as `pass`, `warn`, `fail`, or `not applicable`.
    - Recall: likely query terms find the relevant memory or skill.
    - Precision: discovery returns a small set a future agent can read.
    - Freshness: relationships, supersession, or scope make newer evidence visible.
@@ -43,8 +50,9 @@ git diff --name-status origin/main..HEAD
    - Skill usefulness: a skill captures a repeated procedure, stays concise, and avoids restating broad model knowledge.
    - Mailbox lifecycle: input is claimed through `mailbox/processing/`, replied to under `mailbox/outbox/`, and moved to `mailbox/done/` or `mailbox/failed/`.
    - Return-to-main readiness: the result is useful beyond this branch, passes checks, and leaves evidence for supervisor review.
+   - Feedback pressure: supervisor feedback is converted into a sharper future requirement with a worked signal.
 
-5. Validate.
+6. Validate.
 
 ```bash
 find mailbox/processing -maxdepth 1 -type f ! -name .gitkeep -print
@@ -58,7 +66,7 @@ scripts/docs-check.sh
 
 For changed shell scripts, run `bash -n <script>`. For changed skills, run the local skill validator if dependencies are available; otherwise state that validation was manual and name the blocker.
 
-6. Write durable evidence.
+7. Write durable evidence.
    - Put completed evaluations in `memory/lessons/` when they teach a reusable lesson.
    - Put accepted operating choices in `memory/decisions/`.
    - Put unapproved design changes in `memory/proposals/`.
