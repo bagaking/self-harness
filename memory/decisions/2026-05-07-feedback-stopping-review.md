@@ -19,11 +19,14 @@ related:
   - "mailbox-inbox-2026-05-07-151827-feedback-pressure-challenge"
   - "mailbox-inbox-2026-05-07-152451-post-run-pressure-challenge"
   - "mailbox-inbox-2026-05-07-153204-post-run-pressure-challenge"
+  - "mailbox-inbox-2026-05-07-154303-post-run-pressure-challenge"
   - "decision-2026-05-07-feedback-escalation-check"
   - "mailbox-outbox-2026-05-07-supervisor-evaluation-trigger-list-reply"
   - "mailbox-outbox-2026-05-07-151827-feedback-pressure-challenge-reply"
   - "mailbox-outbox-2026-05-07-150717-post-run-pressure-challenge-reply"
   - "mailbox-outbox-2026-05-07-225840-gate-promotion-negative-evidence-reply"
+  - "scripts/run-linked-feedback-map-check.sh"
+  - "scripts/run-linked-feedback-map-fixture-check.sh"
 ---
 
 # Feedback Stopping Review
@@ -70,6 +73,15 @@ The future run passes this requirement only when the outbox maps each listed com
 
 This belongs in `skills/branch-evolution-evaluation/SKILL.md` because it is now a repeated feedback-pressure review procedure. This memory decision records why the skill step exists and keeps the branch-local rationale discoverable through `scripts/query-docs.sh memory "feedback stopping review"`.
 
+Fresh supervisor feedback on `mailbox/inbox/2026-05-07-154303-post-run-pressure-challenge.md` found the remaining defect: a future run could satisfy the surface procedure by citing the skill and the query, then still stop without a falsifiable failure signal. The branch now treats the stable negative case as executable:
+
+```bash
+scripts/run-linked-feedback-map-check.sh
+scripts/run-linked-feedback-map-fixture-check.sh
+```
+
+The checker scans changed feedback-bearing outbox reports that cite `skills/branch-evolution-evaluation/SKILL.md`, `run-linked`, latest supervisor-facing reports, or `No next supervisor pressure:`. It fails when the report omits the exact `scripts/query-docs.sh skills "run-linked"` evidence, omits the query output header for the skill, lacks either the `git log --oneline -3` to `mailbox/outbox/*.md` map or an explicit acceptance-criteria ordering justification, or turns `Next supervisor pressure:` into the same run-linked-map demand without a sharper proof artifact. The fixture proves three negative cases: skill citation without the map, undocumented filename ordering, and self-referential next-pressure wording without a stronger artifact.
+
 ## Evidence To Inspect
 
 Future supervisors should inspect these signals before accepting a feedback-bearing stop:
@@ -78,6 +90,7 @@ Future supervisors should inspect these signals before accepting a feedback-bear
 - The latest three run commits with `git log --oneline -3`, then the changed files named in those commit messages.
 - The latest three supervisor-facing `mailbox/outbox/*.md` reports linked from those run commits, especially their current weakness, anti-noise boundary, validation, and return-to-main sections.
 - The current feedback-bearing outbox report for exactly one continuity path: either a concrete `Next supervisor pressure:` line or a bounded local refusal accepted by `scripts/feedback-escalation-check.sh`.
+- `scripts/run-linked-feedback-map-check.sh` when the current changed outbox cites this skill, `run-linked`, latest supervisor-facing reports, or `No next supervisor pressure:`.
 - Any memory decision or skill change cited as the mechanism, discovered through `scripts/query-docs.sh memory "feedback stopping review"` or a similarly specific query.
 
 ## Rerunnable Probe
@@ -87,11 +100,13 @@ Use this probe when reviewing whether the stopping rule is discoverable:
 ```bash
 scripts/query-docs.sh memory "feedback stopping review"
 scripts/query-docs.sh skills "run-linked"
+scripts/run-linked-feedback-map-check.sh
+scripts/run-linked-feedback-map-fixture-check.sh
 scripts/supervisor.sh triggers --status review
 scripts/feedback-escalation-check.sh
 ```
 
-The first command must find this decision. The trigger command should be reviewed before accepting a local refusal as enough. The feedback escalation check must pass before handoff for changed feedback-bearing mailbox work.
+The first command must find this decision. The run-linked map checker must fire on the target outbox when this rule is cited. The fixture should be rerun after any edit to the checker or to the branch-evaluation skill's run-linked requirement. The trigger command should be reviewed before accepting a local refusal as enough. The feedback escalation check must pass before handoff for changed feedback-bearing mailbox work.
 
 ## Return-To-Main Judgment
 

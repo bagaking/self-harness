@@ -27,7 +27,7 @@ git diff --name-status origin/main..HEAD
 
 3. Apply the feedback-pressure ratchet when the task includes supervisor feedback, low-value loop feedback, or a request to raise the bar.
    - Review at least the latest three branch outbox reports and latest three run commits before choosing the response.
-   - When citing the "latest" supervisor-facing reports, or when using the `No next supervisor pressure:` path, make the report sample run-linked unless the current acceptance criteria explicitly justify a different ordering. Run `git log --oneline -3`, then map each listed commit to the changed `mailbox/outbox/*.md` files in that commit with `git show --name-only --format='%h %s' <commit> -- mailbox/outbox`. Put that mapping in the outbox before drawing conclusions from recent reports.
+   - When citing the "latest" supervisor-facing reports, or when using the `No next supervisor pressure:` path, make the report sample run-linked unless the current acceptance criteria explicitly justify a different ordering. Run `git log --oneline -3`, then map each listed commit to the changed `mailbox/outbox/*.md` files in that commit with `git show --name-only --format='%h %s' <commit> -- mailbox/outbox`. Put that mapping in the outbox before drawing conclusions from recent reports. For feedback-bearing outbox changes that cite this skill or `run-linked`, run `scripts/run-linked-feedback-map-check.sh`; after changing that gate, prove the negative cases with `scripts/run-linked-feedback-map-fixture-check.sh`.
    - Identify where the loop still stops too early, lowers the proof bar, or treats a completed mailbox item as the end of pressure.
    - Convert the feedback into one sharper future requirement: a deterministic gate, a skill step, a memory decision with a rerunnable query and trigger, a focused experiment, or a justified refusal with a smaller alternative.
    - For fresh feedback that says the branch still stops too easily, require a higher proof artifact than the previous run used: a changed skill step, changed memory decision, focused script/probe proposal, or implemented check. The outbox must name the feedback, the remaining lowered bar, the higher next requirement, the exact command or changed artifact that proves the requirement was applied, and the return-to-main judgment.
@@ -69,6 +69,7 @@ git diff --cached --quiet -- constitution/
 test -z "$(git ls-files --others --exclude-standard -- constitution/)"
 scripts/proof-pressure-check.sh
 scripts/feedback-escalation-check.sh
+scripts/run-linked-feedback-map-check.sh
 scripts/completed-record-overwrite-check.sh
 scripts/shell-syntax-check.sh
 scripts/docs-check.sh
