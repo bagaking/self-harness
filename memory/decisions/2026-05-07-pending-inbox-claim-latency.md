@@ -20,6 +20,7 @@ related:
   - "mailbox-outbox-2026-05-07-pending-inbox-claim-latency-reply"
   - "mailbox-outbox-2026-05-07-115821-post-run-pressure-claim-latency-reply"
   - "mailbox-outbox-2026-05-07-133200-post-run-claim-latency-live-proof-reply"
+  - "mailbox-outbox-2026-05-07-225840-gate-promotion-negative-evidence-reply"
   - "scripts/pending-inbox-claim-latency-check.sh"
   - "scripts/pending-inbox-claim-latency-gate-check.sh"
   - "scripts/pending-inbox-claim-latency-fixture-check.sh"
@@ -53,6 +54,8 @@ The 2026-05-07-131836 boot-prompt challenge found that the generated launch prom
 The next pending-inbox launch after the boot-prompt repair provided the requested live post-fix proof. `scripts/supervisor.sh claim-latency sessions/2026/05/07/rollout-2026-05-07T21-32-41-019e02a3-f8c4-79a1-9605-538f3cd09ec7.jsonl` passed with `claim_delay_seconds=33`. That session read `AGENTS.md` and `constitution/00-charter.md`, claimed the listed inbox into `mailbox/processing/`, and only then used broader constitution, mailbox, memory, skill, and git evidence.
 
 The 2026-05-07-143203 feedback challenge found a new proof-bar gap: commit `183a39b` claimed immediate mailbox claiming, but `scripts/supervisor.sh claim-latency sessions/2026/05/07/rollout-2026-05-07T22-22-08-019e02d1-3ebd-7841-b646-5e1292bf5a0c.jsonl` reported `claim: none` and many broad pre-claim commands. The scanner was also too narrow for a real `mv mailbox/inbox/name.md mailbox/processing/` directory-destination claim. The scanner now recognizes both explicit destination filenames and directory destinations, and the supervisor gate scans changed session transcripts before committing.
+
+The 2026-05-07-225840 gate-promotion challenge added bounded false-positive evidence. `scripts/supervisor.sh claim-latency` passed four selected known-good pending-inbox transcripts: the `d86e0f0` continuity run with `claim_delay_seconds=23`, the `abda1c5` claim-gate run with `claim_delay_seconds=25`, the pre-gate `e45dd74` live proof with `claim_delay_seconds=33`, and the pre-gate `1d50693` live proof with `claim_delay_seconds=27`. This improves promotion evidence but does not close return-to-main review; the next useful sample should include known-good pending-inbox transcripts outside the claim-latency challenge sequence.
 
 ## Operating Rule
 
