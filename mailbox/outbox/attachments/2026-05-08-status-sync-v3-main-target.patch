@@ -653,7 +653,7 @@ index ccd85d2..b851425 100755
 +STATUS_NOTIFY_DEDUP_FILE="${RUN_DIR}/supervisor-notify-last-key"
  CODEX_HOME_DIR="${ROOT_DIR}/.codex"
  SESSIONS_DIR="${ROOT_DIR}/sessions"
- 
+
 @@ -53,6 +53,11 @@ Environment:
    SELF_HARNESS_AUTO_CHALLENGE     Set to 0 to skip automatic progressive challenges on idle agent branches.
    SELF_HARNESS_CODEX_ARGS             Extra args passed to codex exec/resume.
@@ -665,7 +665,7 @@ index ccd85d2..b851425 100755
 +  SELF_HARNESS_NOTIFY_DRY_RUN         Set to 1 to dry-run configured lark-cli sends.
  EOF
  }
- 
+
 @@ -63,7 +68,35 @@ timestamp() {
  log() {
    printf '[%s] %s\n' "$(timestamp)" "$*"
@@ -705,7 +705,7 @@ index ccd85d2..b851425 100755
    mkdir -p "$RUN_DIR" "$LOG_DIR" "$TMP_DIR"
 @@ -758,7 +791,9 @@ run_codex_once() {
    printf '%s\n' "$prompt" >"$prompt_file"
- 
+
    log "choice: ${mode}${detail}"
 -
 +  if [ "$mode" != "resume" ]; then

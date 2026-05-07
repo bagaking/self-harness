@@ -7,7 +7,7 @@ index ccd85d2..0aba830 100755
  LAUNCHD_LABEL="com.bagaking.self-harness.supervisor"
  LAUNCHD_PLIST="${RUN_DIR}/${LAUNCHD_LABEL}.plist"
 +STATUS_NOTIFY_DEDUP_FILE="${RUN_DIR}/supervisor-notify-last-key"
- 
+
  CODEX_HOME_DIR="${ROOT_DIR}/.codex"
  SESSIONS_DIR="${ROOT_DIR}/sessions"
 @@ -53,6 +54,11 @@ Environment:
@@ -21,11 +21,11 @@ index ccd85d2..0aba830 100755
 +  SELF_HARNESS_NOTIFY_DRY_RUN         Set to 1 to dry-run configured lark-cli sends.
  EOF
  }
- 
+
 @@ -64,6 +70,38 @@ log() {
    printf '[%s] %s\n' "$(timestamp)" "$*"
  }
- 
+
 +supervisor_notify() {
 +  local event="$1"
 +  local state="$2"
@@ -63,20 +63,20 @@ index ccd85d2..0aba830 100755
    mkdir -p "$RUN_DIR" "$LOG_DIR" "$TMP_DIR"
 @@ -758,6 +796,11 @@ run_codex_once() {
    printf '%s\n' "$prompt" >"$prompt_file"
- 
+
    log "choice: ${mode}${detail}"
 +  if [ "$mode" = "resume" ]; then
 +    supervisor_notify_once "resume" "running" "codex child resumed" "choice=${mode}${detail}"
 +  else
 +    supervisor_notify_once "start" "running" "codex child started" "choice=${mode}${detail}"
 +  fi
- 
+
    local extra_args=()
    if [ -n "${SELF_HARNESS_CODEX_ARGS:-}" ]; then
 @@ -794,11 +837,23 @@ run_codex_once() {
    release_lock
    trap - EXIT
- 
+
 +  if [ "$status" -ne 0 ]; then
 +    supervisor_notify "failure" "failed" "codex child exited nonzero" "status=${status}; mode=${mode}${detail}"
 +  fi
@@ -95,7 +95,7 @@ index ccd85d2..0aba830 100755
 +      supervisor_notify "progress" "committed" "significant no0 progress committed" "mode=${mode}${detail}"
 +    fi
    fi
- 
+
    return "$status"
 @@ -880,6 +935,7 @@ start_launchd() {
    if launchd_is_loaded; then
@@ -104,11 +104,11 @@ index ccd85d2..0aba830 100755
 +    supervisor_notify_once "start" "running" "start requested while launchd supervisor was already loaded"
      return 0
    fi
- 
+
 @@ -895,12 +951,13 @@ stop_launchd() {
      return 1
    fi
- 
+
 -  if launchd_is_loaded; then
 -    launchctl bootout "$(launchd_domain)" "$LAUNCHD_PLIST" 2>/dev/null \
 -      || launchctl bootout "$(launchd_domain)/${LAUNCHD_LABEL}" 2>/dev/null \
@@ -123,10 +123,10 @@ index ccd85d2..0aba830 100755
 +  echo "stopped launchd supervisor: ${LAUNCHD_LABEL}"
 +  return 0
  }
- 
+
  start_background() {
 @@ -912,6 +969,7 @@ start_background() {
- 
+
    if [ -f "$PID_FILE" ] && is_pid_alive "$(cat "$PID_FILE")"; then
      echo "supervisor already running: pid=$(cat "$PID_FILE")"
 +    supervisor_notify_once "start" "running" "start requested while supervisor was already running"
@@ -135,14 +135,14 @@ index ccd85d2..0aba830 100755
    nohup "${ROOT_DIR}/scripts/supervisor.sh" loop >>"$LOOP_LOG" 2>&1 &
 @@ -921,11 +979,17 @@ start_background() {
  }
- 
+
  stop_background() {
 -  stop_launchd || true
 +  local stopped_launchd=0
 +  if stop_launchd; then
 +    stopped_launchd=1
 +  fi
- 
+
    if [ ! -f "$PID_FILE" ]; then
 -    if ! launchd_is_loaded; then
 +    if [ "$stopped_launchd" -eq 1 ]; then

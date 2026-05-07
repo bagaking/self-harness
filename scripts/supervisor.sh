@@ -984,6 +984,8 @@ run_commit_gate() {
 
   "${ROOT_DIR}/scripts/run-linked-feedback-map-check.sh" || return $?
 
+  "${ROOT_DIR}/scripts/patch-attachment-hygiene-check.sh" || return $?
+
   "${ROOT_DIR}/scripts/docs-check.sh" || return $?
 
   "${ROOT_DIR}/scripts/shell-syntax-check.sh" || return $?
