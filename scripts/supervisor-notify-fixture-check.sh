@@ -14,6 +14,14 @@ log() {
   echo "supervisor-notify-fixture-check: $*"
 }
 
+clear_notification_env() {
+  unset SELF_HARNESS_NOTIFY_CHAT_ID
+  unset SELF_HARNESS_NOTIFY_USER_ID
+  unset SELF_HARNESS_NOTIFY_LARK_BIN
+  unset SELF_HARNESS_NOTIFY_AS
+  unset SELF_HARNESS_NOTIFY_DRY_RUN
+}
+
 write_fake_lark_cli() {
   local dir="$1"
   mkdir -p "$dir"
@@ -48,6 +56,7 @@ run_positive_fake_send() {
     cd "$sandbox"
     git init -q
     git checkout -b agent/no0_self_imporve >/dev/null 2>&1
+    clear_notification_env
     env \
       PATH="${fake_bin}:${PATH}" \
       SELF_HARNESS_SUPERVISOR_ROOT="$sandbox" \
@@ -90,6 +99,7 @@ run_not_configured_case() {
     cd "$sandbox"
     git init -q
     git checkout -b agent/no0_self_imporve >/dev/null 2>&1
+    clear_notification_env
     env \
       PATH="${fake_bin}:${PATH}" \
       SELF_HARNESS_SUPERVISOR_ROOT="$sandbox" \
@@ -121,6 +131,7 @@ run_missing_lark_case() {
     cd "$sandbox"
     git init -q
     git checkout -b agent/no0_self_imporve >/dev/null 2>&1
+    clear_notification_env
     env \
       SELF_HARNESS_SUPERVISOR_ROOT="$sandbox" \
       SELF_HARNESS_NOTIFY_LARK_BIN="definitely-missing-lark-cli" \
