@@ -21,7 +21,7 @@ changed_files() {
 }
 
 main() {
-  local pending changed rel saw_change=0
+  local pending changed rel saw_unhandled_record=0
 
   pending="$(pending_inbox_files)"
   if [ -z "$pending" ]; then
@@ -37,9 +37,13 @@ main() {
 
   while IFS= read -r rel; do
     [ -n "$rel" ] || continue
-    saw_change=1
     case "$rel" in
-      sessions/*)
+      sessions/*|memory/incidents/*.md)
+        saw_unhandled_record=1
+        ;;
+      mailbox/processing/*.md|mailbox/done/*.md|mailbox/failed/*.md|mailbox/outbox/*.md)
+        echo "pending-inbox-session-only-check: ok"
+        return 0
         ;;
       *)
         echo "pending-inbox-session-only-check: ok"
@@ -50,9 +54,9 @@ main() {
 ${changed}
 EOF
 
-  if [ "$saw_change" -eq 1 ]; then
+  if [ "$saw_unhandled_record" -eq 1 ]; then
     {
-      echo "pending-inbox-session-only-check: pending inbox still exists, but the current changes are only session transcripts"
+      echo "pending-inbox-session-only-check: pending inbox still exists, but the current changes are only session transcripts or failure incidents"
       echo
       echo "Pending inbox:"
       printf '%s\n' "$pending" | sed 's/^/- /'
@@ -60,7 +64,7 @@ EOF
       echo "Current changed files:"
       printf '%s\n' "$changed" | sed 's/^/- /'
       echo
-      echo "A run with pending mailbox input must claim and handle an inbox item, write a failure incident, or leave a durable supervisor task. Do not commit a session-only state record as useful progress."
+      echo "A run with pending mailbox input must claim and handle an inbox item, move it to done or failed, write a mailbox outbox reply, or leave a durable supervisor task. Do not commit a timeout-before-claim transcript or incident as useful progress."
     } >&2
     return 1
   fi
