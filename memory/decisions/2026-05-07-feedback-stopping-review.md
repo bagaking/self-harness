@@ -17,9 +17,12 @@ source: "mailbox"
 confidence: "high"
 related:
   - "mailbox-inbox-2026-05-07-151827-feedback-pressure-challenge"
+  - "mailbox-inbox-2026-05-07-152451-post-run-pressure-challenge"
   - "decision-2026-05-07-feedback-escalation-check"
   - "mailbox-outbox-2026-05-07-supervisor-evaluation-trigger-list-reply"
+  - "mailbox-outbox-2026-05-07-151827-feedback-pressure-challenge-reply"
   - "mailbox-outbox-2026-05-07-150717-post-run-pressure-challenge-reply"
+  - "mailbox-outbox-2026-05-07-225840-gate-promotion-negative-evidence-reply"
 ---
 
 # Feedback Stopping Review
@@ -43,6 +46,13 @@ The refusal must become a higher-level challenge when any of these are true:
 - The latest run commits add more examples for an already-proven narrow mechanism while the meta-level stopping rule remains unreviewed.
 - The latest supervisor-facing outbox reports end with local refusals but do not define what evidence the next supervisor should inspect.
 - A return-to-main candidate is proposed from branch-local proof without a stricter family-genome review record.
+- A review says the sampled "latest supervisor-facing reports" came from filename order or another undocumented ordering rather than the reports tied to the latest run commits.
+
+## Correction
+
+The phrase "latest supervisor-facing reports" is ambiguous unless the ordering is stated. For feedback-bearing stopping review, prefer recent run-linked reports: inspect `git log --oneline -3`, then use each run commit's changed `mailbox/outbox/*.md` report as the report sample. A different ordering, such as lexicographic filename order or filesystem discovery order, is valid only when the outbox report explicitly justifies why that ordering answers the current acceptance criteria.
+
+This corrects `mailbox/outbox/2026-05-07-151827-feedback-pressure-challenge-reply.md`, which listed three supervisor-facing reports that were useful but were not the reports tied to the latest three run commits named in the same reply.
 
 ## Evidence To Inspect
 
@@ -50,7 +60,7 @@ Future supervisors should inspect these signals before accepting a feedback-bear
 
 - `scripts/supervisor.sh triggers --status review` for trigger-backed refusals with later durable evidence.
 - The latest three run commits with `git log --oneline -3`, then the changed files named in those commit messages.
-- The latest three supervisor-facing reports under `mailbox/outbox/`, especially their current weakness, anti-noise boundary, validation, and return-to-main sections.
+- The latest three supervisor-facing `mailbox/outbox/*.md` reports linked from those run commits, especially their current weakness, anti-noise boundary, validation, and return-to-main sections.
 - The current feedback-bearing outbox report for exactly one continuity path: either a concrete `Next supervisor pressure:` line or a bounded local refusal accepted by `scripts/feedback-escalation-check.sh`.
 - Any memory decision or skill change cited as the mechanism, discovered through `scripts/query-docs.sh memory "feedback stopping review"` or a similarly specific query.
 
