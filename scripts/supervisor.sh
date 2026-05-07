@@ -108,6 +108,7 @@ Usage:
   scripts/supervisor.sh plan
   scripts/supervisor.sh once
   scripts/supervisor.sh loop
+  scripts/supervisor.sh feedback [-F FILE] [--] FEEDBACK...
   scripts/supervisor.sh commit [--allow-constitution] [-m MESSAGE | -F FILE] [-- PATH...]
   scripts/supervisor.sh start
   scripts/supervisor.sh stop
@@ -405,6 +406,152 @@ seed_progressive_challenge_if_needed() {
   date_value="$(date -u +"%Y-%m-%d")"
   write_progressive_challenge "$id" "$branch" "$date_value"
   log "seeded progressive challenge: mailbox/inbox/${id}.md"
+}
+
+read_feedback_command_input() {
+  local file="" args=()
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -F|--file)
+        [ "$#" -ge 2 ] || {
+          echo "feedback: missing file after $1" >&2
+          return 2
+        }
+        file="$2"
+        shift 2
+        ;;
+      --)
+        shift
+        break
+        ;;
+      *)
+        args+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  while [ "$#" -gt 0 ]; do
+    args+=("$1")
+    shift
+  done
+
+  if [ -n "$file" ]; then
+    if [ "$file" = "-" ]; then
+      cat
+    else
+      cat "$file"
+    fi
+  fi
+
+  if [ "${#args[@]}" -gt 0 ]; then
+    printf '%s\n' "${args[*]}"
+  fi
+}
+
+markdown_quote() {
+  sed 's/^/> /'
+}
+
+text_has_nonspace() {
+  LC_ALL=C rg -q '[^[:space:]]'
+}
+
+write_feedback_pressure_challenge() {
+  local id="$1"
+  local branch="$2"
+  local date_value="$3"
+  local feedback="$4"
+  local file="${ROOT_DIR}/mailbox/inbox/${id}.md"
+
+  cat >"$file" <<EOF
+---
+title: "Feedback Pressure Challenge"
+id: "mailbox-inbox-${id}"
+type: "mailbox-inbox"
+status: "pending"
+owner: "supervisor"
+created: "${date_value}"
+updated: "${date_value}"
+from: "supervisor"
+to: "${branch}"
+message_id: "${id}"
+tags:
+  - supervisor
+  - feedback-pressure
+  - explicit-feedback
+  - self-improvement
+summary: "Turns explicit human feedback into one focused pressure task without waiting for idle-loop heuristics."
+---
+
+# Feedback Pressure Challenge
+
+The supervisor generated this from explicit human feedback. This path exists so fresh feedback can create one focused inbox task even when the idle low-value heuristic would skip launching the agent.
+
+## Feedback
+
+$(printf '%s\n' "$feedback" | markdown_quote)
+
+## Task
+
+Use the feedback to raise the bar without creating generic churn.
+
+1. Review the latest three branch outbox reports and latest three run commits before choosing a response.
+2. Identify the exact way the current loop can still stop too early or lower the proof bar.
+3. Produce exactly one focused mechanism or a bounded refusal:
+   - a deterministic script check or supervisor-loop refinement;
+   - a concise skill refinement;
+   - a memory decision with a rerunnable query probe and trigger;
+   - or a refusal that explains why automation would add noise and names one smaller useful task.
+4. Prove the result with local evidence. Script changes need a positive check and a negative or edge-case check.
+5. Include the strict return-to-main judgment. Default to branch-local or deferred unless the improvement is clearly portable, validated, and has no known degradation for the family genome.
+
+## Acceptance Criteria
+
+- Do not answer with a generic repository sweep or no-pending report.
+- Do not modify \`constitution/\`.
+- Keep durable paths repository-relative and scratch work under \`.self-harness/tmp/\`.
+- Run \`scripts/feedback-escalation-check.sh\`, \`scripts/docs-check.sh\`, and focused validation before handoff.
+- Include exactly one concrete \`Next supervisor pressure:\` line, or one bounded \`No next supervisor pressure:\` refusal with a \`Smaller useful task:\` or \`Stop condition:\`.
+EOF
+}
+
+create_feedback_pressure_challenge() {
+  init_layout
+
+  case "${1:-}" in
+    -h|--help|help)
+      usage
+      return 0
+      ;;
+  esac
+
+  if ! is_agent_branch; then
+    echo "feedback challenge skipped: current branch is not an agent branch" >&2
+    return 1
+  fi
+
+  if has_pending_inbox; then
+    echo "feedback challenge skipped: pending inbox already exists" >&2
+    pending_inbox_files | sed 's/^/- /' >&2
+    return 1
+  fi
+
+  local feedback
+  feedback="$(read_feedback_command_input "$@" | sanitize_recovery_evidence)"
+  if ! printf '%s' "$feedback" | text_has_nonspace; then
+    echo "feedback: provide non-empty feedback text with arguments or -F FILE" >&2
+    return 2
+  fi
+
+  local branch id date_value
+  branch="$(current_branch)"
+  id="$(date -u +"%Y-%m-%d-%H%M%S-feedback-pressure-challenge")"
+  date_value="$(date -u +"%Y-%m-%d")"
+
+  write_feedback_pressure_challenge "$id" "$branch" "$date_value" "$feedback"
+  log "seeded feedback pressure challenge: mailbox/inbox/${id}.md"
 }
 
 changed_outbox_files_with_next_pressure_marker() {
@@ -1655,6 +1802,10 @@ case "${1:-}" in
     ;;
   loop)
     run_loop
+    ;;
+  feedback)
+    shift
+    create_feedback_pressure_challenge "$@"
     ;;
   start)
     start_background
