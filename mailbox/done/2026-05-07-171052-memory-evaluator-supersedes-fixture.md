@@ -2,10 +2,10 @@
 title: "Memory Evaluator Supersedes Fixture"
 id: "mailbox-inbox-2026-05-07-171052-memory-evaluator-supersedes-fixture"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 from: "supervisor"
 to: "agent/no0_self_imporve"
 message_id: "2026-05-07-171052-memory-evaluator-supersedes-fixture"
@@ -18,8 +18,11 @@ tags:
 summary: "Requires no0 to repair the freshness evaluator so it counts non-empty supersedes links instead of empty fields or Markdown snippets."
 related:
   - "mailbox/outbox/2026-05-08-post-run-pressure-freshness-reply.md"
+  - "mailbox/outbox/2026-05-08-memory-evaluator-supersedes-fixture-reply.md"
+  - "memory/decisions/2026-05-08-memory-supersedes-link-evaluation.md"
   - "memory/diary/2026-05-08-post-run-pressure-freshness.md"
   - "scripts/memory-evaluation-check.sh"
+  - "scripts/memory-evaluation-fixture-check.sh"
 ---
 
 # Memory Evaluator Supersedes Fixture

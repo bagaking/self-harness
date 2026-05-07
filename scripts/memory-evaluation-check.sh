@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="${MEMORY_EVALUATION_ROOT_DIR:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
 
 required_memory_paths=(
   "memory/decisions/2026-05-05-skill-and-memory-adoption-criteria.md"
@@ -40,6 +40,102 @@ score() {
   local criterion="$2"
   local detail="$3"
   printf '%s %s: %s\n' "$status" "$criterion" "$detail"
+}
+
+count_supersedes_links() {
+  local memory_dir="${ROOT_DIR}/memory"
+
+  if [ ! -d "$memory_dir" ]; then
+    printf '0\n'
+    return 0
+  fi
+
+  find "$memory_dir" -type f -name '*.md' -print0 \
+    | xargs -0 awk '
+      function trim(value) {
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+        return value
+      }
+
+      function count_inline_list(value, item_count, items, i, item) {
+        gsub(/^[[:space:]]*\[[[:space:]]*/, "", value)
+        gsub(/[[:space:]]*\][[:space:]]*$/, "", value)
+        item_count = split(value, items, ",")
+        for (i = 1; i <= item_count; i++) {
+          item = trim(items[i])
+          if (item != "" && item != "\"\"" && item != "''" && item != "null" && item != "~") {
+            count++
+          }
+        }
+      }
+
+      FNR == 1 {
+        in_frontmatter = ($0 == "---")
+        done_frontmatter = !in_frontmatter
+        in_supersedes = 0
+        next
+      }
+
+      done_frontmatter {
+        next
+      }
+
+      in_frontmatter && $0 == "---" {
+        done_frontmatter = 1
+        in_frontmatter = 0
+        in_supersedes = 0
+        next
+      }
+
+      in_frontmatter {
+        if ($0 ~ /^[A-Za-z_][A-Za-z0-9_-]*:/ && $0 !~ /^supersedes:/) {
+          in_supersedes = 0
+        }
+
+        if ($0 ~ /^supersedes:[[:space:]]*\[[[:space:]]*\][[:space:]]*$/) {
+          in_supersedes = 0
+          next
+        }
+
+        if ($0 ~ /^supersedes:[[:space:]]*$/) {
+          in_supersedes = 1
+          next
+        }
+
+        if ($0 ~ /^supersedes:[[:space:]]*\[[^][]+\][[:space:]]*$/) {
+          value = $0
+          sub(/^supersedes:[[:space:]]*/, "", value)
+          count_inline_list(value)
+          in_supersedes = 0
+          next
+        }
+
+        if ($0 ~ /^supersedes:[[:space:]]*.+/) {
+          value = $0
+          sub(/^supersedes:[[:space:]]*/, "", value)
+          value = trim(value)
+          if (value != "\"\"" && value != "''" && value != "null" && value != "~") {
+            count++
+          }
+          in_supersedes = 0
+          next
+        }
+
+        if (in_supersedes && $0 ~ /^[[:space:]]*-[[:space:]]*.+/) {
+          value = $0
+          sub(/^[[:space:]]*-[[:space:]]*/, "", value)
+          value = trim(value)
+          if (value != "\"\"" && value != "''" && value != "null" && value != "~") {
+            count++
+          }
+          next
+        }
+      }
+
+      END {
+        print count + 0
+      }
+    '
 }
 
 main() {
@@ -104,12 +200,12 @@ main() {
     score "warn" "precision" "memory evaluation query returns ${memory_eval_hits} records and may need narrower follow-up terms"
   fi
 
-  local supersedes_count
-  supersedes_count="$(rg -n '^supersedes:' "${ROOT_DIR}/memory" | wc -l | tr -d '[:space:]' || true)"
-  if [ "$supersedes_count" -gt 0 ]; then
-    score "warn" "freshness" "only ${supersedes_count} memory note declares supersession metadata"
+  local supersedes_link_count
+  supersedes_link_count="$(count_supersedes_links)"
+  if [ "$supersedes_link_count" -gt 0 ]; then
+    score "warn" "freshness" "only ${supersedes_link_count} memory supersedes link is declared in frontmatter"
   else
-    score "warn" "freshness" "no memory note declares supersession metadata"
+    score "warn" "freshness" "no memory supersedes links are declared in frontmatter"
   fi
 
   score "warn" "conflict-handling" "repository preserves contradictory notes append-only, but no deterministic contradiction fixture exists"
@@ -119,4 +215,11 @@ main() {
   [ "$failures" -eq 0 ]
 }
 
-main "$@"
+case "${1:-}" in
+  --count-supersedes-links)
+    count_supersedes_links
+    ;;
+  *)
+    main "$@"
+    ;;
+esac
