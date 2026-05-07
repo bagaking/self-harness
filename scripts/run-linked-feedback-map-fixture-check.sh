@@ -217,6 +217,139 @@ check_allows_explicit_ordering_justification() {
   log "allows explicit acceptance-criteria ordering justification"
 }
 
+prepare_supervisor_gate_sandbox() {
+  local sandbox="$1"
+
+  rm -rf "$sandbox"
+  mkdir -p \
+    "${sandbox}/constitution" \
+    "${sandbox}/scripts" \
+    "${sandbox}/mailbox/inbox" \
+    "${sandbox}/mailbox/processing" \
+    "${sandbox}/mailbox/outbox" \
+    "${sandbox}/mailbox/done" \
+    "${sandbox}/mailbox/failed" \
+    "${sandbox}/memory/diary" \
+    "${sandbox}/memory/decisions" \
+    "${sandbox}/memory/lessons" \
+    "${sandbox}/memory/proposals" \
+    "${sandbox}/memory/incidents" \
+    "${sandbox}/sessions" \
+    "${sandbox}/skills"
+
+  cp "${ROOT_DIR}/AGENTS.md" "${sandbox}/AGENTS.md"
+  cp "${ROOT_DIR}/constitution/"*.md "${sandbox}/constitution/"
+  cp "${ROOT_DIR}/scripts/"*.sh "${sandbox}/scripts/"
+  chmod +x "${sandbox}/scripts/"*.sh
+  if [ -f "${ROOT_DIR}/.gitignore" ]; then
+    cp "${ROOT_DIR}/.gitignore" "${sandbox}/.gitignore"
+  fi
+
+  git -C "$sandbox" init -q
+  git -C "$sandbox" checkout -q -b agent/run-linked-supervisor-gate
+  git -C "$sandbox" config user.name "Self Harness Fixture"
+  git -C "$sandbox" config user.email "self-harness-fixture@example.invalid"
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: initial supervisor gate sandbox"
+}
+
+write_supervisor_gate_bad_outbox() {
+  local file="$1"
+
+  cat >"$file" <<'EOF'
+---
+id: "mailbox-outbox-supervisor-gate-missing-run-linked-map"
+title: "Supervisor Gate Missing Run Linked Map"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-07"
+updated: "2026-05-07"
+from: "agent/run-linked-supervisor-gate"
+to: "supervisor"
+message_id: "supervisor-gate-missing-run-linked-map"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture feedback-pressure report that must be blocked by the supervisor commit gate."
+related:
+  - "skills/branch-evolution-evaluation/SKILL.md"
+  - "scripts/run-linked-feedback-map-check.sh"
+---
+
+# Supervisor Gate Missing Run Linked Map
+
+## Reviewed Evidence
+
+This feedback-pressure fixture cites skills/branch-evolution-evaluation/SKILL.md, latest supervisor-facing reports, and the run-linked procedure.
+
+Command and output:
+
+\`\`\`text
+$ scripts/query-docs.sh skills "run-linked"
+===== skills/branch-evolution-evaluation/SKILL.md =====
+  name: branch-evolution-evaluation
+  30:   - When citing the "latest" supervisor-facing reports, make the report sample run-linked.
+\`\`\`
+
+## Current Weakness
+
+The proof bar is still lower if a changed feedback-bearing outbox can reach the supervisor commit path while omitting the run-linked git-log to mailbox/outbox map.
+
+## Mechanism
+
+This scratch report intentionally omits the map so `scripts/supervisor.sh commit` must reject it through `scripts/run-linked-feedback-map-check.sh`.
+
+## Anti-Noise
+
+No next supervisor pressure: further escalation would be noisy because this fixture is a focused negative case for the commit gate.
+
+I refuse escalation beyond this narrower task in the scratch fixture; the only intended failure is the omitted run-linked map.
+
+Supervisor evaluation trigger: reopen if `scripts/supervisor.sh commit` accepts a changed feedback-pressure outbox that cites run-linked without a map.
+
+Stop condition: `scripts/supervisor.sh triggers --status review` can review trigger-backed refusals before treating this fixture path as complete.
+
+## Verification
+
+Rerunnable verification is `scripts/run-linked-feedback-map-fixture-check.sh`.
+
+## Return-To-Main
+
+Return-to-main is not applicable inside this scratch fixture.
+EOF
+}
+
+check_supervisor_commit_gate_rejects_missing_map() {
+  local sandbox log_file status before_count after_count
+  sandbox="${WORK_DIR}/supervisor-commit-gate"
+  log_file="${WORK_DIR}/supervisor-commit-gate.log"
+  prepare_supervisor_gate_sandbox "$sandbox"
+  write_supervisor_gate_bad_outbox "${sandbox}/mailbox/outbox/supervisor-gate-missing-map.md"
+
+  before_count="$(git -C "$sandbox" rev-list --count HEAD)"
+  set +e
+  (
+    cd "$sandbox"
+    bash scripts/supervisor.sh commit -m "fixture: should fail before commit"
+  ) >"$log_file" 2>&1
+  status=$?
+  set -e
+  after_count="$(git -C "$sandbox" rev-list --count HEAD)"
+
+  [ "$status" -ne 0 ] || {
+    sed -n '1,220p' "$log_file" >&2
+    fail "supervisor commit gate accepted a feedback outbox without a run-linked map"
+  }
+  [ "$before_count" = "$after_count" ] || fail "supervisor commit gate created a commit after rejecting the missing map"
+  rg -q 'run-linked-feedback-map-check: mailbox/outbox/supervisor-gate-missing-map\.md: missing run-linked git-log' "$log_file" || {
+    sed -n '1,220p' "$log_file" >&2
+    fail "supervisor commit gate failure did not come from the run-linked map check"
+  }
+
+  log "supervisor commit gate rejects changed feedback outbox missing run-linked map"
+}
+
 main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
@@ -225,6 +358,7 @@ main() {
   check_rejects_self_referential_next_pressure
   check_allows_run_linked_map_with_artifact
   check_allows_explicit_ordering_justification
+  check_supervisor_commit_gate_rejects_missing_map
   log "ok"
 }
 

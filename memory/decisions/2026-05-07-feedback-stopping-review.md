@@ -5,7 +5,7 @@ type: "memory"
 status: "active"
 owner: "agent"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 tags:
   - decision
   - feedback-pressure
@@ -20,11 +20,13 @@ related:
   - "mailbox-inbox-2026-05-07-152451-post-run-pressure-challenge"
   - "mailbox-inbox-2026-05-07-153204-post-run-pressure-challenge"
   - "mailbox-inbox-2026-05-07-154303-post-run-pressure-challenge"
+  - "mailbox-inbox-2026-05-07-155842-commit-gate-pressure-challenge"
   - "decision-2026-05-07-feedback-escalation-check"
   - "mailbox-outbox-2026-05-07-supervisor-evaluation-trigger-list-reply"
   - "mailbox-outbox-2026-05-07-151827-feedback-pressure-challenge-reply"
   - "mailbox-outbox-2026-05-07-150717-post-run-pressure-challenge-reply"
   - "mailbox-outbox-2026-05-07-225840-gate-promotion-negative-evidence-reply"
+  - "mailbox-outbox-2026-05-08-commit-gate-pressure-challenge-reply"
   - "scripts/run-linked-feedback-map-check.sh"
   - "scripts/run-linked-feedback-map-fixture-check.sh"
 ---
@@ -82,6 +84,10 @@ scripts/run-linked-feedback-map-fixture-check.sh
 
 The checker scans changed feedback-bearing outbox reports that cite `skills/branch-evolution-evaluation/SKILL.md`, `run-linked`, latest supervisor-facing reports, or `No next supervisor pressure:`. It fails when the report omits the exact `scripts/query-docs.sh skills "run-linked"` evidence, omits the query output header for the skill, lacks either the `git log --oneline -3` to `mailbox/outbox/*.md` map or an explicit acceptance-criteria ordering justification, or turns `Next supervisor pressure:` into the same run-linked-map demand without a sharper proof artifact. The fixture proves three negative cases: skill citation without the map, undocumented filename ordering, and self-referential next-pressure wording without a stronger artifact.
 
+Fresh supervisor feedback on `mailbox/inbox/2026-05-07-155842-commit-gate-pressure-challenge.md` found the remaining supervisor-boundary gap: commit `68b8a47` parsed `scripts/run-linked-feedback-map-check.sh` through shell syntax validation, but the actual `scripts/supervisor.sh` commit gate did not execute the checker. The branch now promotes the checker into `run_commit_gate` after `scripts/feedback-escalation-check.sh` and before `scripts/docs-check.sh`.
+
+`scripts/run-linked-feedback-map-fixture-check.sh` now includes a supervisor commit-path negative case. It builds a scratch repository under `.self-harness/tmp/run-linked-feedback-map-check/`, writes a changed feedback-bearing outbox that satisfies the general feedback-escalation structure but intentionally omits the run-linked map, runs `scripts/supervisor.sh commit`, and asserts that no commit is created and the failure comes from `scripts/run-linked-feedback-map-check.sh`.
+
 ## Evidence To Inspect
 
 Future supervisors should inspect these signals before accepting a feedback-bearing stop:
@@ -106,7 +112,7 @@ scripts/supervisor.sh triggers --status review
 scripts/feedback-escalation-check.sh
 ```
 
-The first command must find this decision. The run-linked map checker must fire on the target outbox when this rule is cited. The fixture should be rerun after any edit to the checker or to the branch-evaluation skill's run-linked requirement. The trigger command should be reviewed before accepting a local refusal as enough. The feedback escalation check must pass before handoff for changed feedback-bearing mailbox work.
+The first command must find this decision. The run-linked map checker must fire on the target outbox when this rule is cited. The fixture should be rerun after any edit to the checker, the branch-evaluation skill's run-linked requirement, or the supervisor commit-gate wiring. The trigger command should be reviewed before accepting a local refusal as enough. The feedback escalation check must pass before handoff for changed feedback-bearing mailbox work.
 
 ## Return-To-Main Judgment
 
