@@ -45,8 +45,8 @@ index 0000000..43e8b46
 +++ b/example.txt
 @@ -0,0 +1,2 @@
 +clean line
-+ 
 PATCH
+  printf '+ \n' >>"$WORK_DIR/repo/mailbox/outbox/attachments/dirty-main-target.patch"
 }
 
 check_positive() {
