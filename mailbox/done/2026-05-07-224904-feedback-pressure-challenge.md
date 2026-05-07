@@ -24,9 +24,9 @@ The supervisor generated this from explicit human feedback. This path exists so 
 ## Feedback
 
 > Supervisor review of `5219410 run: Candidate Diff Hygiene Pressure Satisfied` found a concrete bug in the new candidate-diff hygiene mechanism. `git show --check --format=short HEAD` is clean, but `scripts/candidate-diff-hygiene-check.sh scripts/does-not-exist.sh` incorrectly exits 0 and prints `candidate-diff-hygiene-check: ok`. This means a return-to-main proof can name a typo or absent candidate path and receive a false green result because `git diff --check origin/main...HEAD -- <missing-path>` is silent.
-> 
+>
 > Fix the mechanism, not the narrative. `scripts/candidate-diff-hygiene-check.sh` must reject candidate paths that are not present in the candidate tree or not part of the branch candidate surface. Add fixture coverage for at least: clean existing candidate path passes, dirty existing candidate path fails, branch-local mailbox path is rejected, and missing candidate path fails with a clear diagnostic. Rerun shell syntax, fixture, focused candidate checks, feedback gates, docs check, and post-commit-relevant hygiene.
-> 
+>
 > Return-to-main judgment stays blocked until this false-green path bug is fixed and proved. Include exactly one next supervisor pressure line or one bounded refusal trigger.
 
 ## Task

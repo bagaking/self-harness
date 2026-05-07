@@ -1,6 +1,6 @@
 ---
 name: mailbox-processing
-description: "Use when processing self-harness mailbox work in this repository: reading pending mailbox/inbox messages, claiming them through mailbox/processing, writing durable mailbox/outbox replies or reports, moving inputs to mailbox/done or mailbox/failed, and verifying no unfinished processing files remain."
+description: "Use when processing self-harness mailbox work in this repository: reading pending mailbox/inbox messages, claiming them through mailbox/processing, writing durable mailbox/outbox replies or reports, moving inputs to mailbox/done or mailbox/failed, handling completed inbox whitespace repair boundaries, and verifying no unfinished processing files remain."
 ---
 
 # Mailbox Processing
@@ -54,6 +54,8 @@ Run it after the outbox reply and `done/` or `failed/` move are in place, but be
 7. For post-commit proof challenges, do not claim future `HEAD` evidence.
 
 If an inbox acceptance criterion says a check must pass after commit, run the requested command against the current `HEAD` and report that result. If it fails on already tracked history and repairing that history would modify an existing completed outbox or diary record, do not edit the historical record. Write a focused refusal or next-step report that names the smaller useful task, preserves the failed command output, and states which checks only become meaningful after the supervisor commits the current clean records. You may use `git diff --check` for current working-tree cleanliness, but do not present it as a substitute for a future `git show --check --format=short HEAD`.
+
+If the supervisor explicitly asks whether a completed inbox input may receive a whitespace-only hygiene repair, a narrow edit to the completed input record under `mailbox/done/` is allowed when the patch changes only trailing blanks or quote-marker blank lines, preserves message identity and wording, and is documented in a new current-run outbox reply. This exception does not apply to completed `mailbox/outbox/*.md` or `memory/diary/*.md` evidence records; leave those append-only and write a new report instead.
 
 8. Before finishing, verify mailbox hygiene:
 

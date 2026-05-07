@@ -2,10 +2,10 @@
 title: "Post Run Pressure Challenge"
 id: "mailbox-inbox-2026-05-07-231002-post-run-pressure-challenge"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 from: "supervisor"
 to: "agent/no0_self_imporve"
 message_id: "2026-05-07-231002-post-run-pressure-challenge"
@@ -33,3 +33,7 @@ decide whether a completed mailbox input may receive a whitespace-only hygiene r
 - Either satisfy the requirement with rerunnable evidence or write a focused refusal that names the smaller useful next task.
 - Do not replace this with a generic no-pending or repository-state report.
 - Keep durable paths repository-relative and scratch work under `.self-harness/tmp/`.
+
+## Handling
+
+Handled in `mailbox/outbox/2026-05-08-completed-inbox-whitespace-repair-reply.md`. The run authorized and applied a whitespace-only repair to `mailbox/done/2026-05-07-224904-feedback-pressure-challenge.md`, recorded the reusable boundary in `memory/decisions/2026-05-08-completed-inbox-whitespace-repair.md` and `skills/mailbox-processing/SKILL.md`, and left the after-commit `git show --check --format=short HEAD` proof for the supervisor because the current `HEAD` remains the previous committed run until this work is committed.
