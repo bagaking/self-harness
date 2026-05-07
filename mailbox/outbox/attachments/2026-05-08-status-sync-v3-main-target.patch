@@ -1,0 +1,730 @@
+diff --git a/scripts/shell-syntax-check.sh b/scripts/shell-syntax-check.sh
+new file mode 100755
+index 0000000..38679bb
+--- /dev/null
++++ b/scripts/shell-syntax-check.sh
+@@ -0,0 +1,50 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
++
++status=0
++
++repo_relative_path() {
++  local path="$1"
++  case "$path" in
++    "${ROOT_DIR}/"*)
++      printf '%s\n' "${path#${ROOT_DIR}/}"
++      ;;
++    *)
++      printf '%s\n' "$path"
++      ;;
++  esac
++}
++
++check_script() {
++  local script="$1"
++  local rel
++  rel="$(repo_relative_path "$script")"
++
++  if [ ! -f "$script" ]; then
++    echo "shell-syntax-check: missing ${rel}" >&2
++    return 1
++  fi
++
++  if bash -n "$script"; then
++    echo "shell-syntax-check: ok ${rel}"
++    return 0
++  fi
++
++  echo "shell-syntax-check: failed ${rel}" >&2
++  return 1
++}
++
++if [ "$#" -gt 0 ]; then
++  for script in "$@"; do
++    check_script "$script" || status=1
++  done
++else
++  while IFS= read -r script; do
++    check_script "$script" || status=1
++  done < <(find "${ROOT_DIR}/scripts" -maxdepth 1 -type f -name '*.sh' | sort)
++fi
++
++exit "$status"
+diff --git a/scripts/supervisor-notify-cycle-check.sh b/scripts/supervisor-notify-cycle-check.sh
+new file mode 100755
+index 0000000..bc50d09
+--- /dev/null
++++ b/scripts/supervisor-notify-cycle-check.sh
+@@ -0,0 +1,183 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
++WORK_DIR="${ROOT_DIR}/.self-harness/tmp/supervisor-notify-cycle-check"
++
++fail() {
++  echo "supervisor-notify-cycle-check: $*" >&2
++  exit 1
++}
++
++log() {
++  echo "supervisor-notify-cycle-check: $*"
++}
++
++clear_notification_env() {
++  local name
++
++  for name in "${!SELF_HARNESS_NOTIFY_@}"; do
++    unset "$name"
++  done
++}
++
++write_fake_codex() {
++  local dir="$1"
++  mkdir -p "$dir"
++  cat >"${dir}/codex" <<'EOF'
++#!/usr/bin/env bash
++set -euo pipefail
++
++repo=""
++output=""
++while [ "$#" -gt 0 ]; do
++  case "$1" in
++    --cd)
++      shift
++      repo="${1:-}"
++      ;;
++    --output-last-message)
++      shift
++      output="${1:-}"
++      ;;
++  esac
++  shift || break
++done
++
++[ -n "$repo" ] || repo="$(pwd)"
++cd "$repo"
++mkdir -p .self-harness/tmp
++printf 'fake codex invoked\n' >>.self-harness/tmp/fake-codex-invocations.log
++
++if [ -n "$output" ]; then
++  mkdir -p "$(dirname "$output")"
++  printf 'Completed fake notify cycle\n' >"$output"
++fi
++
++exit 42
++EOF
++  chmod +x "${dir}/codex"
++}
++
++write_fake_lark_cli() {
++  local dir="$1"
++  mkdir -p "$dir"
++  cat >"${dir}/lark-cli" <<'EOF'
++#!/usr/bin/env bash
++{
++  printf 'argc=%s\n' "$#"
++  i=0
++  for arg in "$@"; do
++    i=$((i + 1))
++    printf 'arg_%02d=%s\n' "$i" "$arg"
++  done
++} >>"${SELF_HARNESS_FAKE_LARK_LOG:?}"
++exit 0
++EOF
++  chmod +x "${dir}/lark-cli"
++}
++
++prepare_sandbox() {
++  local sandbox="$1"
++  mkdir -p \
++    "${sandbox}/bin" \
++    "${sandbox}/constitution" \
++    "${sandbox}/scripts" \
++    "${sandbox}/mailbox/inbox" \
++    "${sandbox}/mailbox/processing" \
++    "${sandbox}/mailbox/outbox" \
++    "${sandbox}/mailbox/done" \
++    "${sandbox}/mailbox/failed" \
++    "${sandbox}/memory/diary" \
++    "${sandbox}/memory/decisions" \
++    "${sandbox}/memory/lessons" \
++    "${sandbox}/memory/proposals" \
++    "${sandbox}/memory/incidents" \
++    "${sandbox}/sessions" \
++    "${sandbox}/skills"
++
++  cp "${ROOT_DIR}/.gitignore" "${sandbox}/.gitignore"
++  cp "${ROOT_DIR}/AGENTS.md" "${sandbox}/AGENTS.md"
++  cp "${ROOT_DIR}/constitution/"*.md "${sandbox}/constitution/"
++  cp "${ROOT_DIR}/scripts/"*.sh "${sandbox}/scripts/"
++  chmod +x "${sandbox}/scripts/"*.sh
++  write_fake_codex "${sandbox}/bin"
++  write_fake_lark_cli "${sandbox}/bin"
++
++  git -C "$sandbox" init -q
++  git -C "$sandbox" checkout -q -b agent/no0_self_imporve
++}
++
++run_cycle_case() {
++  local case_name="$1"
++  local sandbox log_file fake_lark_log status invocation_count
++  mkdir -p "$WORK_DIR"
++  sandbox="$(mktemp -d "${WORK_DIR}/${case_name}.XXXXXX")"
++  log_file="${sandbox}/cycle.log"
++  fake_lark_log="${sandbox}/fake-lark.log"
++
++  prepare_sandbox "$sandbox"
++
++  set +e
++  (
++    cd "$sandbox"
++    clear_notification_env
++    env \
++      PATH="${sandbox}/bin:${PATH}" \
++      SELF_HARNESS_AUTO_CHALLENGE=0 \
++      SELF_HARNESS_SKIP_COMMIT=1 \
++      SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS=0 \
++      SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS=0 \
++      SELF_HARNESS_FAKE_LARK_LOG="$fake_lark_log" \
++      SELF_HARNESS_NOTIFY_LARK_BIN="lark-cli" \
++      SELF_HARNESS_NOTIFY_CHAT_ID="cycle-proof-chat" \
++      bash scripts/supervisor.sh once
++  ) >"$log_file" 2>&1
++  status=$?
++  set -e
++
++  [ "$status" -eq 42 ] || {
++    sed -n '1,220p' "$log_file" >&2
++    fail "expected supervisor once to return fake Codex status 42, got ${status}"
++  }
++
++  invocation_count="$(wc -l <"${sandbox}/.self-harness/tmp/fake-codex-invocations.log" | tr -d '[:space:]')"
++  [ "$invocation_count" = "1" ] || fail "expected exactly one fake Codex invocation, got ${invocation_count}"
++
++  LC_ALL=C rg -q 'event=start' "${sandbox}/.self-harness/run/supervisor-status.log" || fail "status log missed start event"
++  LC_ALL=C rg -q 'status=running' "${sandbox}/.self-harness/run/supervisor-status.log" || fail "status log missed running state"
++  LC_ALL=C rg -q 'event=failure' "${sandbox}/.self-harness/run/supervisor-status.log" || fail "status log missed failure event"
++  LC_ALL=C rg -q 'status=failed' "${sandbox}/.self-harness/run/supervisor-status.log" || fail "status log missed failed state"
++  LC_ALL=C rg -q 'branch=agent/no0_self_imporve' "${sandbox}/.self-harness/run/supervisor-status.log" || fail "status log missed no0 branch"
++
++  [ -f "$fake_lark_log" ] || fail "fake lark-cli was not invoked"
++  LC_ALL=C rg -q 'arg_[0-9]+=cycle-proof-chat' "$fake_lark_log" || fail "fake lark log missed configured chat id"
++  LC_ALL=C rg -q 'Event: start' "$fake_lark_log" || fail "fake lark log missed start event"
++  LC_ALL=C rg -q 'Event: failure' "$fake_lark_log" || fail "fake lark log missed failure event"
++  LC_ALL=C rg -q -- '--- supervisor for @no\.0\|agent/no0_self_imporve' "$fake_lark_log" || fail "fake lark log missed no0 supervisor signature"
++
++  log "${case_name} checked-out supervisor once emitted start and failure notification events through fake lark-cli"
++}
++
++main() {
++  local polluted_status=0
++
++  run_cycle_case "clean-env"
++
++  set +e
++  SELF_HARNESS_NOTIFY_USER_ID="polluted-parent-user" \
++    SELF_HARNESS_NOTIFY_CHAT_ID="polluted-parent-chat" \
++    SELF_HARNESS_NOTIFY_LARK_BIN="missing-parent-lark" \
++    SELF_HARNESS_NOTIFY_DRY_RUN=1 \
++    SELF_HARNESS_NOTIFY_SIGNATURE="polluted parent signature" \
++    run_cycle_case "polluted-parent-env"
++  polluted_status=$?
++  set -e
++
++  [ "$polluted_status" -eq 0 ] || fail "polluted parent notification environment changed fixture behavior"
++
++  log "ok"
++}
++
++main "$@"
+diff --git a/scripts/supervisor-notify-fixture-check.sh b/scripts/supervisor-notify-fixture-check.sh
+new file mode 100755
+index 0000000..00b852e
+--- /dev/null
++++ b/scripts/supervisor-notify-fixture-check.sh
+@@ -0,0 +1,164 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
++BASE_WORK_DIR="${ROOT_DIR}/.self-harness/tmp/supervisor-notify-fixture-check"
++WORK_DIR=""
++
++fail() {
++  echo "supervisor-notify-fixture-check: $*" >&2
++  exit 1
++}
++
++log() {
++  echo "supervisor-notify-fixture-check: $*"
++}
++
++clear_notification_env() {
++  local name
++
++  for name in "${!SELF_HARNESS_NOTIFY_@}"; do
++    unset "$name"
++  done
++}
++
++write_fake_lark_cli() {
++  local dir="$1"
++  mkdir -p "$dir"
++  cat >"${dir}/lark-cli" <<'EOF'
++#!/usr/bin/env bash
++{
++  printf 'argc=%s\n' "$#"
++  i=0
++  for arg in "$@"; do
++    i=$((i + 1))
++    printf 'arg_%02d=%s\n' "$i" "$arg"
++  done
++} >>"${SELF_HARNESS_FAKE_LARK_LOG:?}"
++exit "${SELF_HARNESS_FAKE_LARK_STATUS:-0}"
++EOF
++  chmod +x "${dir}/lark-cli"
++}
++
++run_positive_fake_send() {
++  local sandbox fake_bin fake_log output status_log
++  sandbox="${WORK_DIR}/positive"
++  fake_bin="${sandbox}/bin"
++  fake_log="${sandbox}/fake-lark.log"
++  output="${sandbox}/notify.out"
++  status_log="${sandbox}/.self-harness/run/supervisor-status.log"
++
++  rm -rf "$sandbox"
++  mkdir -p "$fake_bin"
++  write_fake_lark_cli "$fake_bin"
++
++  (
++    cd "$sandbox"
++    git init -q
++    git checkout -b agent/no0_self_imporve >/dev/null 2>&1
++    clear_notification_env
++    env \
++      PATH="${fake_bin}:${PATH}" \
++      SELF_HARNESS_SUPERVISOR_ROOT="$sandbox" \
++      SELF_HARNESS_FAKE_LARK_LOG="$fake_log" \
++      SELF_HARNESS_NOTIFY_CHAT_ID="fixture-chat-id" \
++      bash "${ROOT_DIR}/scripts/supervisor-notify.sh" \
++        --event start \
++        --status running \
++        --reason "fixture start" \
++        --body "proof body"
++  ) >"$output"
++
++  [ -f "$fake_log" ] || fail "positive fake send did not invoke lark-cli"
++  LC_ALL=C rg -q 'arg_01=im' "$fake_log" || fail "fake lark command did not use im"
++  LC_ALL=C rg -q 'arg_02=\+messages-send' "$fake_log" || fail "fake lark command did not use +messages-send"
++  LC_ALL=C rg -q 'arg_[0-9]+=--chat-id' "$fake_log" || fail "fake lark command did not include --chat-id"
++  LC_ALL=C rg -q 'arg_[0-9]+=fixture-chat-id' "$fake_log" || fail "fake lark command did not include fixture chat id"
++  LC_ALL=C rg -q -- '--- supervisor for @no\.0\|agent/no0_self_imporve' "$fake_log" || fail "fake lark message missed no0 supervisor signature"
++  LC_ALL=C rg -q 'Event: start' "$fake_log" || fail "fake lark message missed event"
++  LC_ALL=C rg -q 'Status: running' "$fake_log" || fail "fake lark message missed status"
++  [ -f "$status_log" ] || fail "positive fake send did not write local status log"
++  LC_ALL=C rg -q 'event=start' "$status_log" || fail "status log missed start event"
++  LC_ALL=C rg -q 'status=running' "$status_log" || fail "status log missed running state"
++  log "positive fake send recorded and invoked fake lark-cli"
++}
++
++run_not_configured_case() {
++  local sandbox fake_bin fake_log output status_log
++  sandbox="${WORK_DIR}/not-configured"
++  fake_bin="${sandbox}/bin"
++  fake_log="${sandbox}/fake-lark.log"
++  output="${sandbox}/notify.out"
++  status_log="${sandbox}/.self-harness/run/supervisor-status.log"
++
++  rm -rf "$sandbox"
++  mkdir -p "$fake_bin"
++  write_fake_lark_cli "$fake_bin"
++
++  (
++    cd "$sandbox"
++    git init -q
++    git checkout -b agent/no0_self_imporve >/dev/null 2>&1
++    clear_notification_env
++    env \
++      PATH="${fake_bin}:${PATH}" \
++      SELF_HARNESS_SUPERVISOR_ROOT="$sandbox" \
++      SELF_HARNESS_FAKE_LARK_LOG="$fake_log" \
++      bash "${ROOT_DIR}/scripts/supervisor-notify.sh" \
++        --event stop \
++        --status stopped \
++        --reason "not configured proof"
++  ) >"$output"
++
++  [ ! -f "$fake_log" ] || fail "not-configured case unexpectedly invoked lark-cli"
++  [ -f "$status_log" ] || fail "not-configured case did not write local status log"
++  LC_ALL=C rg -q 'event=stop' "$status_log" || fail "status log missed stop event"
++  LC_ALL=C rg -q 'status=stopped' "$status_log" || fail "status log missed stopped state"
++  LC_ALL=C rg -q 'lark send skipped: not configured' "$output" || fail "not-configured output did not explain skipped send"
++  log "not-configured case recorded status without invoking fake lark-cli"
++}
++
++run_missing_lark_case() {
++  local sandbox output status=0
++  sandbox="${WORK_DIR}/missing-lark"
++  output="${sandbox}/notify.out"
++
++  rm -rf "$sandbox"
++  mkdir -p "$sandbox"
++
++  set +e
++  (
++    cd "$sandbox"
++    git init -q
++    git checkout -b agent/no0_self_imporve >/dev/null 2>&1
++    clear_notification_env
++    env \
++      SELF_HARNESS_SUPERVISOR_ROOT="$sandbox" \
++      SELF_HARNESS_NOTIFY_LARK_BIN="definitely-missing-lark-cli" \
++      SELF_HARNESS_NOTIFY_CHAT_ID="fixture-chat-id" \
++      bash "${ROOT_DIR}/scripts/supervisor-notify.sh" \
++        --event failure \
++        --status failed \
++        --reason "missing lark proof"
++  ) >"$output" 2>&1
++  status=$?
++  set -e
++
++  [ "$status" -eq 1 ] || fail "missing-lark case expected status 1, got ${status}"
++  LC_ALL=C rg -q 'not found; status was recorded but not sent' "$output" || fail "missing-lark case did not explain missing lark-cli"
++  log "missing lark-cli case fails after local record"
++}
++
++main() {
++  mkdir -p "$BASE_WORK_DIR"
++  WORK_DIR="$(mktemp -d "${BASE_WORK_DIR}/run.XXXXXX")"
++  trap 'rm -rf "$WORK_DIR"' EXIT
++
++  run_positive_fake_send
++  run_not_configured_case
++  run_missing_lark_case
++  log "ok"
++}
++
++main "$@"
+diff --git a/scripts/supervisor-notify.sh b/scripts/supervisor-notify.sh
+new file mode 100755
+index 0000000..bf121d9
+--- /dev/null
++++ b/scripts/supervisor-notify.sh
+@@ -0,0 +1,222 @@
++#!/usr/bin/env bash
++set -euo pipefail
++
++if [ -n "${SELF_HARNESS_SUPERVISOR_ROOT:-}" ]; then
++  ROOT_DIR="$SELF_HARNESS_SUPERVISOR_ROOT"
++  SCRIPT_DIR="${ROOT_DIR}/scripts"
++else
++  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
++  ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
++fi
++
++PRIVATE_DIR="${ROOT_DIR}/.self-harness"
++RUN_DIR="${PRIVATE_DIR}/run"
++STATUS_LOG="${RUN_DIR}/supervisor-status.log"
++
++EVENT=""
++STATE=""
++REASON=""
++BODY=""
++BRANCH=""
++
++usage() {
++  cat <<'EOF'
++Usage:
++  scripts/supervisor-notify.sh --event EVENT --status STATUS --reason REASON [--body TEXT] [--branch BRANCH]
++
++Records a supervisor status event locally. If SELF_HARNESS_NOTIFY_CHAT_ID or
++SELF_HARNESS_NOTIFY_USER_ID is configured, also sends the status through
++lark-cli im +messages-send.
++
++Configuration:
++  SELF_HARNESS_NOTIFY_CHAT_ID       Optional chat recipient for lark-cli.
++  SELF_HARNESS_NOTIFY_USER_ID       Optional direct-message recipient for lark-cli.
++  SELF_HARNESS_NOTIFY_AS            lark-cli identity, default bot.
++  SELF_HARNESS_NOTIFY_LARK_BIN      lark-cli binary, default lark-cli.
++  SELF_HARNESS_NOTIFY_SIGNATURE     Optional explicit signature line.
++  SELF_HARNESS_NOTIFY_DRY_RUN       Set to 1 to pass --dry-run to lark-cli.
++  SELF_HARNESS_NOTIFY_DISABLE       Set to 1 to skip recording and sending.
++EOF
++}
++
++while [ "$#" -gt 0 ]; do
++  case "$1" in
++    --event)
++      [ "$#" -ge 2 ] || {
++        echo "supervisor-notify: missing value for --event" >&2
++        exit 2
++      }
++      EVENT="$2"
++      shift 2
++      ;;
++    --status|--state)
++      [ "$#" -ge 2 ] || {
++        echo "supervisor-notify: missing value for $1" >&2
++        exit 2
++      }
++      STATE="$2"
++      shift 2
++      ;;
++    --reason)
++      [ "$#" -ge 2 ] || {
++        echo "supervisor-notify: missing value for --reason" >&2
++        exit 2
++      }
++      REASON="$2"
++      shift 2
++      ;;
++    --body|--detail)
++      [ "$#" -ge 2 ] || {
++        echo "supervisor-notify: missing value for $1" >&2
++        exit 2
++      }
++      BODY="$2"
++      shift 2
++      ;;
++    --branch)
++      [ "$#" -ge 2 ] || {
++        echo "supervisor-notify: missing value for --branch" >&2
++        exit 2
++      }
++      BRANCH="$2"
++      shift 2
++      ;;
++    -h|--help|help)
++      usage
++      exit 0
++      ;;
++    *)
++      echo "supervisor-notify: unknown argument: $1" >&2
++      usage >&2
++      exit 2
++      ;;
++  esac
++done
++
++if [ "${SELF_HARNESS_NOTIFY_DISABLE:-0}" = "1" ]; then
++  echo "supervisor-notify: disabled"
++  exit 0
++fi
++
++[ -n "$EVENT" ] || {
++  echo "supervisor-notify: --event is required" >&2
++  exit 2
++}
++[ -n "$STATE" ] || {
++  echo "supervisor-notify: --status is required" >&2
++  exit 2
++}
++[ -n "$REASON" ] || {
++  echo "supervisor-notify: --reason is required" >&2
++  exit 2
++}
++
++timestamp() {
++  date -u +"%Y-%m-%dT%H:%M:%SZ"
++}
++
++current_branch() {
++  git -C "$ROOT_DIR" branch --show-current 2>/dev/null || true
++}
++
++single_line() {
++  tr '\n\t' '  ' | sed -E 's/[[:space:]]+/ /g; s/^[[:space:]]+//; s/[[:space:]]+$//'
++}
++
++signature_line() {
++  if [ -n "${SELF_HARNESS_NOTIFY_SIGNATURE:-}" ]; then
++    printf '%s\n' "$SELF_HARNESS_NOTIFY_SIGNATURE"
++    return 0
++  fi
++
++  case "$BRANCH" in
++    agent/no0_self_imporve)
++      printf '%s\n' "--- supervisor for @no.0|${BRANCH}"
++      ;;
++    *)
++      printf '%s\n' "--- supervisor"
++      ;;
++  esac
++}
++
++if [ -z "$BRANCH" ]; then
++  BRANCH="$(current_branch)"
++fi
++[ -n "$BRANCH" ] || BRANCH="unknown"
++
++TS="$(timestamp)"
++SIGNATURE="$(signature_line)"
++
++mkdir -p "$RUN_DIR"
++{
++  printf '%s\t' "$TS"
++  printf 'event=%s\t' "$(printf '%s' "$EVENT" | single_line)"
++  printf 'status=%s\t' "$(printf '%s' "$STATE" | single_line)"
++  printf 'branch=%s\t' "$(printf '%s' "$BRANCH" | single_line)"
++  printf 'reason=%s\n' "$(printf '%s' "$REASON" | single_line)"
++} >>"$STATUS_LOG"
++
++message="$(
++  cat <<EOF
++Self-harness supervisor status
++Event: ${EVENT}
++Status: ${STATE}
++Branch: ${BRANCH}
++Reason: ${REASON}
++EOF
++)"
++
++if [ -n "$BODY" ]; then
++  message="$(
++    cat <<EOF
++${message}
++Detail: ${BODY}
++EOF
++  )"
++fi
++
++message="$(
++  cat <<EOF
++${message}
++Time: ${TS}
++${SIGNATURE}
++EOF
++)"
++
++chat_id="${SELF_HARNESS_NOTIFY_CHAT_ID:-}"
++user_id="${SELF_HARNESS_NOTIFY_USER_ID:-}"
++
++if [ -z "$chat_id" ] && [ -z "$user_id" ]; then
++  echo "supervisor-notify: recorded ${EVENT}; lark send skipped: not configured"
++  exit 0
++fi
++
++if [ -n "$chat_id" ] && [ -n "$user_id" ]; then
++  echo "supervisor-notify: configure only one of SELF_HARNESS_NOTIFY_CHAT_ID or SELF_HARNESS_NOTIFY_USER_ID" >&2
++  exit 2
++fi
++
++lark_bin="${SELF_HARNESS_NOTIFY_LARK_BIN:-lark-cli}"
++if ! command -v "$lark_bin" >/dev/null 2>&1; then
++  echo "supervisor-notify: ${lark_bin} not found; status was recorded but not sent" >&2
++  exit 1
++fi
++
++identity="${SELF_HARNESS_NOTIFY_AS:-bot}"
++idempotency_key="self-harness-${EVENT}-${TS}"
++idempotency_key="$(printf '%s' "$idempotency_key" | tr -c 'A-Za-z0-9_.:-' '-')"
++
++cmd=("$lark_bin" im +messages-send --as "$identity")
++if [ -n "$chat_id" ]; then
++  cmd+=(--chat-id "$chat_id")
++else
++  cmd+=(--user-id "$user_id")
++fi
++cmd+=(--text "$message" --idempotency-key "$idempotency_key")
++
++if [ "${SELF_HARNESS_NOTIFY_DRY_RUN:-0}" = "1" ]; then
++  cmd+=(--dry-run)
++fi
++
++"${cmd[@]}"
++echo "supervisor-notify: recorded and sent ${EVENT}"
+diff --git a/scripts/supervisor.sh b/scripts/supervisor.sh
+index ccd85d2..b851425 100755
+--- a/scripts/supervisor.sh
++++ b/scripts/supervisor.sh
+@@ -15,7 +15,7 @@ LOOP_LOG="${LOG_DIR}/supervisor.log"
+ GATE_REPORT="${TMP_DIR}/commit-gate-last-report.md"
+ LAUNCHD_LABEL="com.bagaking.self-harness.supervisor"
+ LAUNCHD_PLIST="${RUN_DIR}/${LAUNCHD_LABEL}.plist"
+-
++STATUS_NOTIFY_DEDUP_FILE="${RUN_DIR}/supervisor-notify-last-key"
+ CODEX_HOME_DIR="${ROOT_DIR}/.codex"
+ SESSIONS_DIR="${ROOT_DIR}/sessions"
+ 
+@@ -53,6 +53,11 @@ Environment:
+   SELF_HARNESS_AUTO_CHALLENGE     Set to 0 to skip automatic progressive challenges on idle agent branches.
+   SELF_HARNESS_CODEX_ARGS             Extra args passed to codex exec/resume.
+   SELF_HARNESS_SKIP_COMMIT            Set to 1 to skip post-run commits.
++  SELF_HARNESS_NOTIFY_CHAT_ID         Optional lark-cli chat recipient for supervisor status.
++  SELF_HARNESS_NOTIFY_USER_ID         Optional lark-cli direct-message recipient for supervisor status.
++  SELF_HARNESS_NOTIFY_AS              lark-cli identity for status sends. Default: bot.
++  SELF_HARNESS_NOTIFY_LARK_BIN        lark-cli binary for status sends. Default: lark-cli.
++  SELF_HARNESS_NOTIFY_DRY_RUN         Set to 1 to dry-run configured lark-cli sends.
+ EOF
+ }
+ 
+@@ -63,7 +68,35 @@ timestamp() {
+ log() {
+   printf '[%s] %s\n' "$(timestamp)" "$*"
+ }
+-
++supervisor_notify() {
++  local event="$1"
++  local state="$2"
++  local reason="$3"
++  local body="${4:-}"
++
++  "${ROOT_DIR}/scripts/supervisor-notify.sh" \
++    --event "$event" \
++    --status "$state" \
++    --reason "$reason" \
++    --body "$body" \
++    --branch "$(current_branch)" \
++    >/dev/null 2>&1 \
++    || log "supervisor notify failed: event=${event} status=${state}"
++}
++supervisor_notify_once() {
++  local event="$1"
++  local state="$2"
++  local reason="$3"
++  local body="${4:-}"
++  local key
++  mkdir -p "$RUN_DIR"
++  key="${event}|${state}|${reason}|$(current_branch)"
++  if [ -f "$STATUS_NOTIFY_DEDUP_FILE" ] && [ "$(cat "$STATUS_NOTIFY_DEDUP_FILE")" = "$key" ]; then
++    return 0
++  fi
++  printf '%s\n' "$key" >"$STATUS_NOTIFY_DEDUP_FILE"
++  supervisor_notify "$event" "$state" "$reason" "$body"
++}
+ init_layout() {
+   "${ROOT_DIR}/scripts/init.sh" >/dev/null
+   mkdir -p "$RUN_DIR" "$LOG_DIR" "$TMP_DIR"
+@@ -758,7 +791,9 @@ run_codex_once() {
+   printf '%s\n' "$prompt" >"$prompt_file"
+ 
+   log "choice: ${mode}${detail}"
+-
++  if [ "$mode" != "resume" ]; then
++    supervisor_notify_once "start" "running" "codex child started" "choice=${mode}${detail}"
++  fi
+   local extra_args=()
+   if [ -n "${SELF_HARNESS_CODEX_ARGS:-}" ]; then
+     # shellcheck disable=SC2206
+@@ -790,10 +825,11 @@ run_codex_once() {
+   fi
+   set -e
+   rm -f "$prompt_file"
+-
+   release_lock
+   trap - EXIT
+-
++  if [ "$status" -ne 0 ]; then
++    supervisor_notify "failure" "failed" "codex child exited nonzero" "status=${status}; mode=${mode}${detail}"
++  fi
+   if [ "${SELF_HARNESS_SKIP_COMMIT:-0}" != "1" ]; then
+     if ! commit_changes_with_repair; then
+       log "post-run commit failed"

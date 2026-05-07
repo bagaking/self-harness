@@ -131,10 +131,30 @@ is_required_bootstrap_file_probe() {
   esac
 }
 
+is_mailbox_presence_probe() {
+  local cmd="$1"
+
+  case "$cmd" in
+    "ls -1 mailbox/inbox"|\
+    "ls -1 mailbox/inbox 2>/dev/null || true"|\
+    "ls -1 mailbox/processing"|\
+    "ls -1 mailbox/processing 2>/dev/null || true")
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 is_broad_preclaim_command() {
   local cmd="$1"
 
   if is_required_bootstrap_file_probe "$cmd"; then
+    return 1
+  fi
+
+  if is_mailbox_presence_probe "$cmd"; then
     return 1
   fi
 

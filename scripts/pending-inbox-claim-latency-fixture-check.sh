@@ -76,6 +76,19 @@ write_bootstrap_probe_session() {
 EOF
 }
 
+write_mailbox_presence_probe_session() {
+  local file="$1"
+  cat >"$file" <<'EOF'
+{"timestamp":"2026-05-07T00:00:00.000Z","type":"session_meta","payload":{"id":"mailbox-presence-probe"}}
+{"timestamp":"2026-05-07T00:00:00.100Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Pending mailbox before launch:\n- mailbox/inbox/pending-task.md\n\nMailbox priority:\n- After reading AGENTS.md and constitution/00-charter.md, if exactly one pending inbox is listed, claim that file into mailbox/processing/ before broad repository inspection."}]}}
+{"timestamp":"2026-05-07T00:00:03.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n '1,220p' AGENTS.md\"}"}}
+{"timestamp":"2026-05-07T00:00:08.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n '1,260p' constitution/00-charter.md\"}"}}
+{"timestamp":"2026-05-07T00:00:14.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"ls -1 mailbox/inbox\"}"}}
+{"timestamp":"2026-05-07T00:00:15.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"ls -1 mailbox/processing 2>/dev/null || true\"}"}}
+{"timestamp":"2026-05-07T00:00:24.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"mv mailbox/inbox/pending-task.md mailbox/processing/pending-task.md\"}"}}
+EOF
+}
+
 write_broad_rg_session() {
   local file="$1"
   cat >"$file" <<'EOF'
@@ -168,6 +181,23 @@ check_allows_required_bootstrap_probe() {
   rg -q 'pending-inbox-claim-latency-check: ok .*claim_delay_seconds=31' "$log_file" || fail "bootstrap probe pass did not report the expected claim delay"
 
   log "allows required bootstrap file probe before claim"
+}
+
+check_allows_mailbox_presence_probe() {
+  local sandbox log_file session
+  sandbox="${WORK_DIR}/mailbox-presence-probe"
+  log_file="${WORK_DIR}/mailbox-presence-probe.log"
+  session="${sandbox}/sessions/mailbox-presence-probe.jsonl"
+  prepare_sandbox "$sandbox"
+  write_mailbox_presence_probe_session "$session"
+
+  run_scanner "$sandbox" "$session" "$log_file" || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "mailbox presence probe should pass"
+  }
+  rg -q 'pending-inbox-claim-latency-check: ok .*claim_delay_seconds=24' "$log_file" || fail "mailbox presence probe pass did not report the expected claim delay"
+
+  log "allows narrow mailbox presence probes before claim"
 }
 
 check_rejects_broad_rg_before_claim() {
@@ -269,6 +299,7 @@ main() {
   check_rejects_delayed_broad_claim
   check_allows_claim_first
   check_allows_required_bootstrap_probe
+  check_allows_mailbox_presence_probe
   check_rejects_broad_rg_before_claim
   check_skips_no_pending_prompt
   check_gate_rejects_changed_delayed_session
