@@ -31,6 +31,7 @@ DEFAULT_CODEX_MAX_RUNTIME_SECONDS=1800
 DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS=300
 DEFAULT_CODEX_WATCHDOG_POLL_SECONDS=10
 DEFAULT_AUTO_CHALLENGE=1
+NEXT_PRESSURE_MARKER_PATTERN='^Next supervisor pressure:[[:space:]]*.'
 
 SUPERVISOR_STABLE_COPY_ACTIVE=0
 SUPERVISOR_SOURCE_FINGERPRINT_AT_START=""
@@ -400,6 +401,104 @@ seed_progressive_challenge_if_needed() {
   date_value="$(date -u +"%Y-%m-%d")"
   write_progressive_challenge "$id" "$branch" "$date_value"
   log "seeded progressive challenge: mailbox/inbox/${id}.md"
+}
+
+changed_outbox_files_with_next_pressure_marker() {
+  local rel file
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    case "$rel" in
+      mailbox/outbox/*.md)
+        file="${ROOT_DIR}/${rel}"
+        [ -f "$file" ] || continue
+        if LC_ALL=C rg -q -- "$NEXT_PRESSURE_MARKER_PATTERN" "$file"; then
+          printf '%s\n' "$rel"
+          return 0
+        fi
+        ;;
+    esac
+  done < <(staged_or_changed_files)
+}
+
+extract_next_pressure_requirement() {
+  local rel="$1"
+  awk '
+    /^Next supervisor pressure:[[:space:]]*/ {
+      value = $0
+      sub(/^Next supervisor pressure:[[:space:]]*/, "", value)
+      gsub(/[[:space:]]+/, " ", value)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      print substr(value, 1, 240)
+      exit
+    }
+  ' "${ROOT_DIR}/${rel}"
+}
+
+write_post_run_pressure_challenge() {
+  local source_rel="$1"
+  local requirement="$2"
+  local branch="$3"
+  local date_value="$4"
+  local id="$5"
+  local file="${ROOT_DIR}/mailbox/inbox/${id}.md"
+
+  cat >"$file" <<EOF
+---
+title: "Post Run Pressure Challenge"
+id: "mailbox-inbox-${id}"
+type: "mailbox-inbox"
+status: "pending"
+owner: "supervisor"
+created: "${date_value}"
+updated: "${date_value}"
+from: "supervisor"
+to: "${branch}"
+message_id: "${id}"
+tags:
+  - supervisor
+  - feedback-pressure
+  - post-run-pressure
+  - self-improvement
+summary: "Seeds the next sharper requirement declared by the completed feedback-bearing run."
+related:
+  - "${source_rel}"
+---
+
+# Post Run Pressure Challenge
+
+The completed run declared unresolved follow-up pressure in `${source_rel}`. The supervisor generated this inbox item before committing so the next foreground loop has a concrete target instead of treating the previous reply as the end of supervision.
+
+## Requirement
+
+${requirement}
+
+## Acceptance Criteria
+
+- Review `${source_rel}` before broad repository inspection.
+- Either satisfy the requirement with rerunnable evidence or write a focused refusal that names the smaller useful next task.
+- Do not replace this with a generic no-pending or repository-state report.
+- Keep durable paths repository-relative and scratch work under `.self-harness/tmp/`.
+EOF
+}
+
+seed_post_run_pressure_challenge_if_needed() {
+  [ "$AUTO_CHALLENGE" = "1" ] || return 0
+  is_agent_branch || return 0
+  has_pending_inbox && return 0
+
+  local source_rel requirement branch date_value id
+  source_rel="$(changed_outbox_files_with_next_pressure_marker | head -1)"
+  [ -n "$source_rel" ] || return 0
+
+  requirement="$(extract_next_pressure_requirement "$source_rel")"
+  [ -n "$requirement" ] || return 0
+
+  branch="$(current_branch)"
+  date_value="$(date -u +"%Y-%m-%d")"
+  id="$(date -u +"%Y-%m-%d-%H%M%S-post-run-pressure-challenge")"
+  write_post_run_pressure_challenge "$source_rel" "$requirement" "$branch" "$date_value" "$id"
+  log "seeded post-run pressure challenge: mailbox/inbox/${id}.md from ${source_rel}"
 }
 
 should_skip_idle_agent_launch() {
@@ -1063,6 +1162,7 @@ run_codex_once() {
   fi
 
   if [ "${SELF_HARNESS_SKIP_COMMIT:-0}" != "1" ]; then
+    seed_post_run_pressure_challenge_if_needed
     if ! commit_changes_with_repair; then
       log "post-run commit failed"
       return 1

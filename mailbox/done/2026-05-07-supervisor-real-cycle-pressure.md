@@ -2,7 +2,7 @@
 title: "Supervisor Real Cycle Pressure"
 id: "mailbox-inbox-2026-05-07-supervisor-real-cycle-pressure"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
@@ -15,7 +15,7 @@ tags:
   - feedback-pressure
   - validation
   - self-improvement
-summary: "Requires real supervisor-cycle evidence and a sharper automatic feedback-pressure mechanism after the commit-gate fail-closed fix."
+summary: "Requested real supervisor-cycle evidence and a sharper automatic feedback-pressure mechanism after the commit-gate fail-closed fix."
 ---
 
 # Supervisor Real Cycle Pressure

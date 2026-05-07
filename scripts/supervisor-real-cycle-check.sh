@@ -1,0 +1,455 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+WORK_DIR="${ROOT_DIR}/.self-harness/tmp/supervisor-real-cycle-check"
+
+fail() {
+  echo "supervisor-real-cycle-check: $*" >&2
+  exit 1
+}
+
+log() {
+  echo "supervisor-real-cycle-check: $*"
+}
+
+run_with_timeout() {
+  local seconds="$1"
+  shift
+
+  "$@" &
+  local child="$!"
+  local remaining="$seconds"
+  while [ "$remaining" -gt 0 ]; do
+    if ! kill -0 "$child" 2>/dev/null; then
+      wait "$child"
+      return "$?"
+    fi
+    sleep 1
+    remaining=$((remaining - 1))
+  done
+
+  kill "$child" 2>/dev/null || true
+  wait "$child" 2>/dev/null || true
+  return 124
+}
+
+write_pending_message() {
+  local file="$1"
+  local id="$2"
+  local title="$3"
+  {
+    printf '%s\n' '---'
+    printf 'id: "mailbox-inbox-%s"\n' "$id"
+    printf 'title: "%s"\n' "$title"
+    printf '%s\n' 'type: "mailbox-inbox"'
+    printf '%s\n' 'status: "pending"'
+    printf '%s\n' 'owner: "supervisor"'
+    printf '%s\n' 'created: "2026-05-07"'
+    printf '%s\n' 'updated: "2026-05-07"'
+    printf '%s\n' 'from: "supervisor"'
+    printf '%s\n' 'to: "agent/real-cycle-check"'
+    printf 'message_id: "%s"\n' "$id"
+    printf '%s\n' 'tags:'
+    printf '%s\n' '  - supervisor'
+    printf '%s\n' '  - control-plane'
+    printf '%s\n' 'summary: "Pending controlled supervisor cycle input."'
+    printf '%s\n' '---'
+    printf '\n# %s\n\nHandle this controlled supervisor cycle input.\n' "$title"
+  } >"$file"
+}
+
+write_fake_codex() {
+  local dir="$1"
+  mkdir -p "$dir"
+  cat >"${dir}/codex" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo=""
+output=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --cd)
+      shift
+      repo="${1:-}"
+      ;;
+    --output-last-message)
+      shift
+      output="${1:-}"
+      ;;
+  esac
+  shift || break
+done
+
+if [ -z "$repo" ]; then
+  repo="$(pwd)"
+fi
+
+cd "$repo"
+mkdir -p .self-harness/tmp
+printf '%s\n' "${SELF_HARNESS_REAL_CYCLE_FAKE_MODE:-unset}" >> .self-harness/tmp/fake-codex-invocations.log
+
+if [ -n "$output" ]; then
+  mkdir -p "$(dirname "$output")"
+  printf 'Completed fake real-cycle Codex run\n' >"$output"
+fi
+
+case "${SELF_HARNESS_REAL_CYCLE_FAKE_MODE:-}" in
+  valid-loop)
+    title="Valid Real Cycle"
+    summary="Records a fake Codex run that made a syntactically valid supervisor source change."
+    marker="valid-real-cycle"
+    ;;
+  invalid-loop)
+    title="Invalid Real Cycle"
+    summary="Records a fake Codex run that made an invalid supervisor source change."
+    marker="invalid-real-cycle"
+    ;;
+  pressure-once)
+    title="Post Run Pressure Marker"
+    summary="Records a fake Codex run that declares a next supervisor pressure requirement."
+    marker="pressure-real-cycle"
+    ;;
+  *)
+    echo "unknown fake mode: ${SELF_HARNESS_REAL_CYCLE_FAKE_MODE:-}" >&2
+    exit 2
+    ;;
+esac
+
+mkdir -p mailbox/done mailbox/outbox memory/diary
+if inbox_file="$(find mailbox/inbox -maxdepth 1 -type f ! -name .gitkeep | sort | head -1)" && [ -n "$inbox_file" ]; then
+  done_file="mailbox/done/$(basename "$inbox_file")"
+  sed 's/status: "pending"/status: "done"/' "$inbox_file" >"$done_file"
+  rm -f "$inbox_file"
+fi
+
+cat >"memory/diary/${marker}.md" <<DIARY
+---
+id: "diary-${marker}"
+title: "${title}"
+type: "diary"
+status: "active"
+owner: "agent"
+created: "2026-05-07"
+updated: "2026-05-07"
+tags:
+  - diary
+  - supervisor
+  - control-plane
+summary: "${summary}"
+source: "experiment"
+confidence: "high"
+related: []
+---
+
+# diary: ${title}
+
+${summary}
+DIARY
+
+case "${SELF_HARNESS_REAL_CYCLE_FAKE_MODE:-}" in
+  valid-loop)
+    cat >"mailbox/outbox/${marker}-reply.md" <<OUTBOX
+---
+id: "mailbox-outbox-${marker}-reply"
+title: "Valid Real Cycle Reply"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-07"
+updated: "2026-05-07"
+from: "agent/real-cycle-check"
+to: "supervisor"
+message_id: "${marker}-reply"
+tags:
+  - mailbox
+  - supervisor
+  - control-plane
+summary: "Reports a controlled valid supervisor source edit."
+related: []
+---
+
+# Valid Real Cycle Reply
+
+The fake run appended a valid marker to the checked-out supervisor source.
+OUTBOX
+    printf '\n# real-cycle valid supervisor marker\n' >> scripts/supervisor.sh
+    ;;
+  invalid-loop)
+    cat >"mailbox/outbox/${marker}-reply.md" <<OUTBOX
+---
+id: "mailbox-outbox-${marker}-reply"
+title: "Invalid Real Cycle Reply"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-07"
+updated: "2026-05-07"
+from: "agent/real-cycle-check"
+to: "supervisor"
+message_id: "${marker}-reply"
+tags:
+  - mailbox
+  - supervisor
+  - control-plane
+summary: "Reports a controlled invalid supervisor source edit."
+related: []
+---
+
+# Invalid Real Cycle Reply
+
+The fake run appended invalid shell syntax to the checked-out supervisor source.
+OUTBOX
+    cat > scripts/supervisor.sh <<'BROKEN_SUPERVISOR'
+#!/usr/bin/env bash
+printf "unterminated real-cycle marker
+BROKEN_SUPERVISOR
+    ;;
+  pressure-once)
+    cat >"mailbox/outbox/${marker}-reply.md" <<OUTBOX
+---
+id: "mailbox-outbox-${marker}-reply"
+title: "Post Run Pressure Marker Reply"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-07"
+updated: "2026-05-07"
+from: "agent/real-cycle-check"
+to: "supervisor"
+message_id: "${marker}-reply"
+tags:
+  - mailbox
+  - supervisor
+  - feedback-pressure
+summary: "Declares unresolved follow-up pressure for the supervisor to seed."
+related: []
+---
+
+# Post Run Pressure Marker Reply
+
+## Reviewed Evidence
+
+Reviewed one controlled sandbox run and its changed mailbox output.
+
+## Current Weakness
+
+The exact current weakness is that a completed feedback-bearing run can declare a narrower task and still leave no pending inbox for the next launch.
+
+## Mechanism
+
+The supervisor should convert this marker into a pending inbox before committing the completed run.
+
+## Anti-Noise
+
+This is a narrower task and a refused escalation path for broad, generic follow-up.
+
+## Verification
+
+Rerunnable verification is provided by scripts/supervisor-real-cycle-check.sh.
+
+## Return-To-Main
+
+Return-to-main is no for this scratch-only marker.
+
+Next supervisor pressure: Prove the generated post-run pressure inbox is handled instead of ending at the completed feedback-bearing reply.
+OUTBOX
+    ;;
+esac
+EOF
+  chmod +x "${dir}/codex"
+}
+
+prepare_sandbox() {
+  local sandbox="$1"
+  local message_id="$2"
+  local title="$3"
+
+  rm -rf "$sandbox"
+  mkdir -p \
+    "${sandbox}/bin" \
+    "${sandbox}/constitution" \
+    "${sandbox}/scripts" \
+    "${sandbox}/mailbox/inbox" \
+    "${sandbox}/mailbox/processing" \
+    "${sandbox}/mailbox/outbox" \
+    "${sandbox}/mailbox/done" \
+    "${sandbox}/mailbox/failed" \
+    "${sandbox}/memory/diary" \
+    "${sandbox}/memory/decisions" \
+    "${sandbox}/memory/lessons" \
+    "${sandbox}/memory/proposals" \
+    "${sandbox}/memory/incidents" \
+    "${sandbox}/sessions" \
+    "${sandbox}/skills"
+
+  cp "${ROOT_DIR}/.gitignore" "${sandbox}/.gitignore"
+  cp "${ROOT_DIR}/AGENTS.md" "${sandbox}/AGENTS.md"
+  cp "${ROOT_DIR}/constitution/"*.md "${sandbox}/constitution/"
+  cp "${ROOT_DIR}/scripts/"*.sh "${sandbox}/scripts/"
+  chmod +x "${sandbox}/scripts/"*.sh
+  write_fake_codex "${sandbox}/bin"
+  write_pending_message "${sandbox}/mailbox/inbox/${message_id}.md" "$message_id" "$title"
+
+  git -C "$sandbox" init -q
+  git -C "$sandbox" checkout -q -b agent/real-cycle-check
+  git -C "$sandbox" config user.name "Self Harness Fixture"
+  git -C "$sandbox" config user.email "self-harness-fixture@example.invalid"
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: initial real supervisor cycle sandbox"
+}
+
+commit_count() {
+  git -C "$1" rev-list --count HEAD
+}
+
+assert_clean_worktree() {
+  local sandbox="$1"
+  local status
+  status="$(git -C "$sandbox" status --porcelain --untracked-files=all)"
+  [ -z "$status" ] || {
+    printf '%s\n' "$status" >&2
+    fail "$(basename "$sandbox"): expected a clean worktree"
+  }
+}
+
+check_valid_loop_commits_and_exits() {
+  local sandbox log_file status
+  sandbox="${WORK_DIR}/valid-loop"
+  log_file="${WORK_DIR}/valid-loop.log"
+  prepare_sandbox "$sandbox" "valid-real-cycle-input" "Valid Real Cycle Input"
+
+  set +e
+  (
+    cd "$sandbox"
+    run_with_timeout 30 env \
+      PATH="${sandbox}/bin:${PATH}" \
+      SELF_HARNESS_AUTO_CHALLENGE=0 \
+      SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS=0 \
+      SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS=0 \
+      SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS=1 \
+      SELF_HARNESS_INTERVAL_SECONDS=60 \
+      SELF_HARNESS_REAL_CYCLE_FAKE_MODE=valid-loop \
+      bash scripts/supervisor.sh loop
+  ) >"$log_file" 2>&1
+  status=$?
+  set -e
+
+  if [ "$status" -ne 0 ]; then
+    sed -n '1,220p' "$log_file" >&2
+    fail "valid loop returned ${status}"
+  fi
+
+  [ "$(commit_count "$sandbox")" -eq 2 ] || fail "valid loop did not create exactly one supervisor commit"
+  git -C "$sandbox" show --name-only --format= HEAD | rg -q '^scripts/supervisor.sh$' || fail "valid commit did not include scripts/supervisor.sh"
+  rg -q 'supervisor source changed during stable-copy loop and passed readiness check; exiting' "$log_file" || {
+    sed -n '1,220p' "$log_file" >&2
+    fail "valid loop did not exit after readiness passed"
+  }
+  [ "$(wc -l <"${sandbox}/.self-harness/tmp/fake-codex-invocations.log" | tr -d '[:space:]')" = "1" ] || fail "valid loop invoked fake Codex more than once"
+  assert_clean_worktree "$sandbox"
+
+  log "valid foreground loop committed checked-out supervisor change and exited after readiness"
+}
+
+check_invalid_loop_fails_closed() {
+  local sandbox log_file status invocations
+  sandbox="${WORK_DIR}/invalid-loop"
+  log_file="${WORK_DIR}/invalid-loop.log"
+  prepare_sandbox "$sandbox" "invalid-real-cycle-input" "Invalid Real Cycle Input"
+
+  set +e
+  (
+    cd "$sandbox"
+    run_with_timeout 30 env \
+      PATH="${sandbox}/bin:${PATH}" \
+      SELF_HARNESS_AUTO_CHALLENGE=0 \
+      SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS=0 \
+      SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS=0 \
+      SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS=1 \
+      SELF_HARNESS_INTERVAL_SECONDS=60 \
+      SELF_HARNESS_REAL_CYCLE_FAKE_MODE=invalid-loop \
+      bash scripts/supervisor.sh loop
+  ) >"$log_file" 2>&1
+  status=$?
+  set -e
+
+  if [ "$status" -ne 124 ]; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "invalid loop returned ${status}; expected bounded harness timeout with stable copy still in control"
+  fi
+
+  [ "$(commit_count "$sandbox")" -eq 1 ] || fail "invalid loop created a commit despite invalid supervisor syntax"
+  rg -q 'post-run commit gate failed; asking Codex session for one repair attempt' "$log_file" || {
+    sed -n '1,260p' "$log_file" >&2
+    fail "invalid loop did not trigger bounded repair path"
+  }
+  rg -q 'shell-syntax-check: failed scripts/supervisor.sh' "$log_file" || {
+    sed -n '1,260p' "$log_file" >&2
+    fail "invalid loop did not fail through shell syntax gate"
+  }
+  rg -q 'supervisor source changed during stable-copy loop but failed readiness check; keeping stable copy in control' "$log_file" || {
+    sed -n '1,260p' "$log_file" >&2
+    fail "invalid loop did not keep the stable copy in control"
+  }
+  if rg -q 'passed readiness check; exiting' "$log_file"; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "invalid loop looked like a clean handoff"
+  fi
+  invocations="$(wc -l <"${sandbox}/.self-harness/tmp/fake-codex-invocations.log" | tr -d '[:space:]')"
+  [ "$invocations" = "2" ] || fail "invalid loop expected exactly one repair attempt, got ${invocations} fake Codex invocations"
+
+  log "invalid foreground loop rejected checked-out supervisor change without packaging success"
+}
+
+check_post_run_pressure_seeding() {
+  local sandbox log_file status seeded_count
+  sandbox="${WORK_DIR}/post-run-pressure"
+  log_file="${WORK_DIR}/post-run-pressure.log"
+  prepare_sandbox "$sandbox" "pressure-real-cycle-input" "Pressure Real Cycle Input"
+
+  set +e
+  (
+    cd "$sandbox"
+    run_with_timeout 30 env \
+      PATH="${sandbox}/bin:${PATH}" \
+      SELF_HARNESS_AUTO_CHALLENGE=1 \
+      SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS=0 \
+      SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS=0 \
+      SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS=1 \
+      SELF_HARNESS_REAL_CYCLE_FAKE_MODE=pressure-once \
+      bash scripts/supervisor.sh once
+  ) >"$log_file" 2>&1
+  status=$?
+  set -e
+
+  if [ "$status" -ne 0 ]; then
+    sed -n '1,260p' "$log_file" >&2
+    fail "post-run pressure once returned ${status}"
+  fi
+
+  [ "$(commit_count "$sandbox")" -eq 2 ] || fail "post-run pressure case did not create exactly one supervisor commit"
+  rg -q 'seeded post-run pressure challenge:' "$log_file" || {
+    sed -n '1,260p' "$log_file" >&2
+    fail "post-run pressure case did not log challenge seeding"
+  }
+  seeded_count="$(find "$sandbox/mailbox/inbox" -maxdepth 1 -type f -name '*post-run-pressure-challenge.md' | wc -l | tr -d '[:space:]')"
+  [ "$seeded_count" = "1" ] || fail "expected one committed post-run pressure inbox, found ${seeded_count}"
+  git -C "$sandbox" show --name-only --format= HEAD | rg -q '^mailbox/inbox/.*post-run-pressure-challenge\.md$' || fail "post-run pressure inbox was not included in the supervisor commit"
+  assert_clean_worktree "$sandbox"
+
+  log "post-run pressure marker seeded a committed next inbox before handoff"
+}
+
+main() {
+  rm -rf "$WORK_DIR"
+  mkdir -p "$WORK_DIR"
+  check_valid_loop_commits_and_exits
+  check_invalid_loop_fails_closed
+  check_post_run_pressure_seeding
+  log "ok"
+}
+
+main "$@"
