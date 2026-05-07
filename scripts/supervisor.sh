@@ -24,6 +24,7 @@ DEFAULT_RESUME_MAX_AGE_SECONDS=21600
 DEFAULT_RESUME_MAX_BYTES=600000
 DEFAULT_CODEX_MAX_RUNTIME_SECONDS=1800
 DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS=300
+DEFAULT_CODEX_WATCHDOG_POLL_SECONDS=10
 DEFAULT_AUTO_CHALLENGE=1
 
 INTERVAL_SECONDS="${SELF_HARNESS_INTERVAL_SECONDS:-$DEFAULT_INTERVAL_SECONDS}"
@@ -31,6 +32,7 @@ RESUME_MAX_AGE_SECONDS="${SELF_HARNESS_RESUME_MAX_AGE_SECONDS:-$DEFAULT_RESUME_M
 RESUME_MAX_BYTES="${SELF_HARNESS_RESUME_MAX_BYTES:-$DEFAULT_RESUME_MAX_BYTES}"
 CODEX_MAX_RUNTIME_SECONDS="${SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS:-$DEFAULT_CODEX_MAX_RUNTIME_SECONDS}"
 CODEX_IDLE_TIMEOUT_SECONDS="${SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS:-$DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS}"
+CODEX_WATCHDOG_POLL_SECONDS="${SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS:-$DEFAULT_CODEX_WATCHDOG_POLL_SECONDS}"
 AUTO_CHALLENGE="${SELF_HARNESS_AUTO_CHALLENGE:-$DEFAULT_AUTO_CHALLENGE}"
 
 usage() {
@@ -50,6 +52,7 @@ Environment:
   SELF_HARNESS_RESUME_MAX_BYTES       Latest-session size limit. Default: 600000.
   SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS Max seconds for one Codex child. Default: 1800.
   SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS Max seconds without session/log output. Default: 300.
+  SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS Watchdog poll interval. Default: 10.
   SELF_HARNESS_AUTO_CHALLENGE     Set to 0 to skip automatic progressive challenges on idle agent branches.
   SELF_HARNESS_CODEX_ARGS             Extra args passed to codex exec/resume.
   SELF_HARNESS_SKIP_COMMIT            Set to 1 to skip post-run commits.
@@ -71,7 +74,19 @@ init_layout() {
 
 is_pid_alive() {
   local pid="$1"
-  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+  local state
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+
+  if state="$(ps -o stat= -p "$pid" 2>/dev/null)" && [ -n "$state" ]; then
+    case "${state#"${state%%[![:space:]]*}"}" in
+      Z*)
+        return 1
+        ;;
+    esac
+  fi
+
+  return 0
 }
 
 active_lock_pid() {
@@ -224,8 +239,13 @@ is_agent_branch() {
 }
 
 has_pending_inbox() {
+  pending_inbox_files | rg -q .
+}
+
+pending_inbox_files() {
   find "${ROOT_DIR}/mailbox/inbox" -maxdepth 1 -type f ! -name .gitkeep 2>/dev/null \
-    | rg -q .
+    | sort \
+    | sed "s#^${ROOT_DIR}/##"
 }
 
 recent_low_value_subjects() {
@@ -329,6 +349,8 @@ should_skip_idle_agent_launch() {
 
 build_boot_prompt() {
   local mode="$1"
+  local mailbox_section
+  mailbox_section="$(build_pending_mailbox_prompt)"
   cat <<EOF
 You are running inside the self-harness repository.
 
@@ -340,6 +362,8 @@ This repository is the agent itself. sessions/, mailbox/, memory/, and skills/ a
 
 Keep committed content portable: use repository-relative paths, do not modify files outside this repository, and do not expose local usernames, hostnames, home directories, or machine-specific absolute paths. Use .self-harness/tmp/ for experiments, reference clones, temporary projects, and subagent experiment sandboxes.
 
+${mailbox_section}
+
 Primary task for this run:
 - Inspect repository state.
 - Read pending mailbox/inbox messages and produce durable replies or reports under mailbox/outbox.
@@ -349,6 +373,29 @@ Primary task for this run:
 - Run scripts/docs-check.sh before finishing.
 - If this is a new session, review the repository and write a GFM diary under memory/diary suitable for use as the commit message.
 - Do not run git add or git commit yourself. The supervisor owns staging and committing after this Codex process exits.
+EOF
+}
+
+build_pending_mailbox_prompt() {
+  local pending
+  pending="$(pending_inbox_files | sed 's/^/- /')"
+  if [ -z "$pending" ]; then
+    cat <<'EOF'
+Pending mailbox before launch:
+- none
+EOF
+    return 0
+  fi
+
+  cat <<EOF
+Pending mailbox before launch:
+${pending}
+
+Mailbox priority:
+- After reading AGENTS.md and constitution/00-charter.md, inspect the listed pending inbox before any broad repository sweep.
+- Claim exactly one pending file by moving it from mailbox/inbox/ to mailbox/processing/.
+- If there is only one pending file, claim that file first and handle its acceptance criteria.
+- A run with pending inbox that exits without a processing, done, failed, or outbox record is not useful progress.
 EOF
 }
 
@@ -705,6 +752,125 @@ latest_activity_epoch() {
   fi
 }
 
+repo_relative_path() {
+  local path="$1"
+  case "$path" in
+    "${ROOT_DIR}/"*)
+      printf '%s\n' "${path#${ROOT_DIR}/}"
+      ;;
+    *)
+      printf '%s\n' "$path"
+      ;;
+  esac
+}
+
+write_run_failure_incident() {
+  local status="$1"
+  local mode="$2"
+  local detail="$3"
+  local output="$4"
+  local date_value id file latest rel_output rel_latest pending
+
+  date_value="$(date -u +"%Y-%m-%d")"
+  id="$(date -u +"%Y-%m-%d-%H%M%S-codex-run-failure")"
+  file="${ROOT_DIR}/memory/incidents/${id}.md"
+  rel_output="$(repo_relative_path "$output")"
+  latest="$(latest_session_file || true)"
+  if [ -n "$latest" ]; then
+    rel_latest="$(repo_relative_path "$latest")"
+  else
+    rel_latest="none"
+  fi
+  pending="$(pending_inbox_files | sed 's/^/- /')"
+  if [ -z "$pending" ]; then
+    pending="- none"
+  fi
+
+  cat >"$file" <<EOF
+---
+title: "Codex Run Failure"
+id: "incident-${id}"
+type: "incident"
+status: "active"
+owner: "supervisor"
+created: "${date_value}"
+updated: "${date_value}"
+tags:
+  - incident
+  - supervisor
+  - codex-run
+  - watchdog
+summary: "Records a Codex child run that exited nonzero before producing a normal diary-backed commit."
+---
+
+# Codex Run Failure
+
+## Summary
+
+The supervisor child run exited with status ${status}. This incident exists so a failed or timed-out run is not disguised as ordinary progress.
+
+## Run Context
+
+- Mode: ${mode}
+- Choice detail: ${detail}
+- Last-message output: ${rel_output}
+- Latest session: ${rel_latest}
+- Pending inbox at incident time:
+${pending}
+
+## Supervisor Action
+
+The supervisor should only auto-commit this failure state when the changed files are limited to session transcripts and incident records. If other repository files changed during the failed run, leave them uncommitted for review or repair instead of packaging partial work as success.
+
+## Next Check
+
+Inspect the latest session and pending inbox. If a concrete mailbox task remains, restart the loop only after the control-plane issue has been narrowed or converted into a sharper inbox requirement.
+EOF
+
+  repo_relative_path "$file"
+}
+
+changed_files_are_failure_state_only() {
+  local rel saw_file
+  saw_file=0
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    saw_file=1
+    case "$rel" in
+      sessions/*|memory/incidents/*.md)
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+  done < <(staged_or_changed_files)
+
+  [ "$saw_file" -eq 1 ]
+}
+
+commit_failure_state_if_safe() {
+  local status="$1"
+  local mode="$2"
+  local detail="$3"
+  local output="$4"
+  local rel paths=()
+
+  write_run_failure_incident "$status" "$mode" "$detail" "$output" >/dev/null
+
+  if ! changed_files_are_failure_state_only; then
+    log "codex run failed; failure incident written but automatic commit skipped because non-failure files changed"
+    return 0
+  fi
+
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    paths+=("$rel")
+  done < <(staged_or_changed_files)
+
+  [ "${#paths[@]}" -gt 0 ] || return 0
+  commit_changes -m "incident: codex run failed status ${status}" -- "${paths[@]}"
+}
+
 terminate_process_tree() {
   local pid="$1"
   [ -n "$pid" ] || return 0
@@ -741,7 +907,10 @@ run_with_watchdog() {
   child=$!
 
   while is_pid_alive "$child"; do
-    sleep 10
+    sleep "$CODEX_WATCHDOG_POLL_SECONDS"
+    if ! is_pid_alive "$child"; then
+      break
+    fi
     update_lock_heartbeat
     now="$(date +%s)"
     last_activity="$(latest_activity_epoch "$output")"
@@ -824,6 +993,13 @@ run_codex_once() {
 
   release_lock
   trap - EXIT
+
+  if [ "$status" -ne 0 ]; then
+    if [ "${SELF_HARNESS_SKIP_COMMIT:-0}" != "1" ]; then
+      commit_failure_state_if_safe "$status" "$mode" "$detail" "$output" || log "failure-state commit failed"
+    fi
+    return "$status"
+  fi
 
   if [ "${SELF_HARNESS_SKIP_COMMIT:-0}" != "1" ]; then
     if ! commit_changes_with_repair; then
