@@ -420,7 +420,7 @@ check_invalid_loop_recovers_checked_out_source() {
 }
 
 check_post_run_pressure_seeding() {
-  local sandbox log_file status seeded_count
+  local sandbox log_file status seeded_count seeded_file
   sandbox="${WORK_DIR}/post-run-pressure"
   log_file="${WORK_DIR}/post-run-pressure.log"
   prepare_sandbox "$sandbox" "pressure-real-cycle-input" "Pressure Real Cycle Input"
@@ -452,6 +452,10 @@ check_post_run_pressure_seeding() {
   }
   seeded_count="$(find "$sandbox/mailbox/inbox" -maxdepth 1 -type f -name '*post-run-pressure-challenge.md' | wc -l | tr -d '[:space:]')"
   [ "$seeded_count" = "1" ] || fail "expected one committed post-run pressure inbox, found ${seeded_count}"
+  seeded_file="$(find "$sandbox/mailbox/inbox" -maxdepth 1 -type f -name '*post-run-pressure-challenge.md' | sort | head -1)"
+  rg -q 'mailbox/outbox/pressure-real-cycle-reply\.md' "$seeded_file" || fail "post-run pressure inbox omitted source outbox path"
+  rg -q 'Review `mailbox/outbox/pressure-real-cycle-reply\.md` before broad repository inspection\.' "$seeded_file" || fail "post-run pressure inbox omitted review source path"
+  rg -q 'scratch work under `.self-harness/tmp/`' "$seeded_file" || fail "post-run pressure inbox omitted scratch path"
   git -C "$sandbox" show --name-only --format= HEAD | rg -q '^mailbox/inbox/.*post-run-pressure-challenge\.md$' || fail "post-run pressure inbox was not included in the supervisor commit"
   assert_clean_worktree "$sandbox"
 

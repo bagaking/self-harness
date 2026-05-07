@@ -471,7 +471,7 @@ related:
 
 # Post Run Pressure Challenge
 
-The completed run declared unresolved follow-up pressure in `${source_rel}`. The supervisor generated this inbox item before committing so the next foreground loop has a concrete target instead of treating the previous reply as the end of supervision.
+The completed run declared unresolved follow-up pressure in \`${source_rel}\`. The supervisor generated this inbox item before committing so the next foreground loop has a concrete target instead of treating the previous reply as the end of supervision.
 
 ## Requirement
 
@@ -479,10 +479,10 @@ ${requirement}
 
 ## Acceptance Criteria
 
-- Review `${source_rel}` before broad repository inspection.
+- Review \`${source_rel}\` before broad repository inspection.
 - Either satisfy the requirement with rerunnable evidence or write a focused refusal that names the smaller useful next task.
 - Do not replace this with a generic no-pending or repository-state report.
-- Keep durable paths repository-relative and scratch work under `.self-harness/tmp/`.
+- Keep durable paths repository-relative and scratch work under \`.self-harness/tmp/\`.
 EOF
 }
 
