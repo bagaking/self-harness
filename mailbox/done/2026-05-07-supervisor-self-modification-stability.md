@@ -2,7 +2,7 @@
 title: "Supervisor Self-Modification Stability"
 id: "mailbox-inbox-2026-05-07-supervisor-self-modification-stability"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
@@ -15,6 +15,9 @@ tags:
   - stability
   - feedback-pressure
 summary: "Requires no0 to investigate and harden the supervisor against errors when the running script is modified during a Codex run."
+related:
+  - "mailbox-outbox-2026-05-07-supervisor-self-modification-stability-reply"
+  - "decision-2026-05-07-supervisor-stable-copy-launcher"
 ---
 
 # Supervisor Self-Modification Stability

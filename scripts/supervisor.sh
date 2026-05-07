@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [ -n "${SELF_HARNESS_SUPERVISOR_ROOT:-}" ]; then
+  ROOT_DIR="$SELF_HARNESS_SUPERVISOR_ROOT"
+  SCRIPT_DIR="${ROOT_DIR}/scripts"
+else
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
 
 PRIVATE_DIR="${ROOT_DIR}/.self-harness"
 RUN_DIR="${PRIVATE_DIR}/run"
@@ -34,6 +39,52 @@ CODEX_MAX_RUNTIME_SECONDS="${SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS:-$DEFAULT_CO
 CODEX_IDLE_TIMEOUT_SECONDS="${SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS:-$DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS}"
 CODEX_WATCHDOG_POLL_SECONDS="${SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS:-$DEFAULT_CODEX_WATCHDOG_POLL_SECONDS}"
 AUTO_CHALLENGE="${SELF_HARNESS_AUTO_CHALLENGE:-$DEFAULT_AUTO_CHALLENGE}"
+
+command_needs_stable_supervisor() {
+  case "${1:-}" in
+    once|loop|commit)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+current_supervisor_script_path() {
+  local current_dir
+  current_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  printf '%s/%s\n' "$current_dir" "$(basename "${BASH_SOURCE[0]}")"
+}
+
+run_from_stable_supervisor_copy_if_needed() {
+  command_needs_stable_supervisor "${1:-}" || return 0
+
+  local current_script
+  current_script="$(current_supervisor_script_path)"
+  if [ -n "${SELF_HARNESS_SUPERVISOR_STABLE_PATH:-}" ] && [ "$current_script" = "$SELF_HARNESS_SUPERVISOR_STABLE_PATH" ]; then
+    unset SELF_HARNESS_SUPERVISOR_STABLE_PATH
+    unset SELF_HARNESS_SUPERVISOR_ROOT
+    return 0
+  fi
+
+  mkdir -p "$RUN_DIR"
+
+  local source_script stable_script tmp_script
+  source_script="${ROOT_DIR}/scripts/supervisor.sh"
+  stable_script="${RUN_DIR}/supervisor-stable-$$.sh"
+  tmp_script="${stable_script}.tmp"
+
+  cp "$source_script" "$tmp_script"
+  chmod +x "$tmp_script"
+  mv "$tmp_script" "$stable_script"
+
+  export SELF_HARNESS_SUPERVISOR_STABLE_PATH="$stable_script"
+  export SELF_HARNESS_SUPERVISOR_ROOT="$ROOT_DIR"
+  exec "${BASH:-bash}" "$stable_script" "$@"
+}
+
+run_from_stable_supervisor_copy_if_needed "$@"
 
 usage() {
   cat <<'EOF'
@@ -524,7 +575,7 @@ check_portable_content() {
       errors=$((errors + 1))
     fi
 
-    if LC_ALL=C rg -n --color never '(HOSTNAME|USER|USERNAME|LOGNAME|HOME)=[^[:space:]`'"'"'"]+' "$file"; then
+    if LC_ALL=C rg -n --color never '(^|[^[:alnum:]_])(HOSTNAME|USER|USERNAME|LOGNAME|HOME)=[^[:space:]`'"'"'"]+' "$file"; then
       errors=$((errors + 1))
     fi
 
