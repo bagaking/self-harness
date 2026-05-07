@@ -317,6 +317,16 @@ pending_inbox_files() {
     | sed "s#^${ROOT_DIR}/##"
 }
 
+has_pending_processing() {
+  pending_processing_files | rg -q .
+}
+
+pending_processing_files() {
+  find "${ROOT_DIR}/mailbox/processing" -maxdepth 1 -type f ! -name .gitkeep 2>/dev/null \
+    | sort \
+    | sed "s#^${ROOT_DIR}/##"
+}
+
 recent_low_value_subjects() {
   git -C "$ROOT_DIR" log --format=%s -n 12 2>/dev/null \
     | rg -i '^(run: (record self-harness state|new mode|new session no pending|new run state)|run: .*?(no pending|mailbox sweep|state mailbox|repository state|repository inspection))' \
@@ -535,6 +545,12 @@ create_feedback_pressure_challenge() {
   if has_pending_inbox; then
     echo "feedback challenge skipped: pending inbox already exists" >&2
     pending_inbox_files | sed 's/^/- /' >&2
+    return 1
+  fi
+
+  if has_pending_processing; then
+    echo "feedback challenge skipped: mailbox processing already exists" >&2
+    pending_processing_files | sed 's/^/- /' >&2
     return 1
   fi
 

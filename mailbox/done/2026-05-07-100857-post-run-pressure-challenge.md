@@ -2,7 +2,7 @@
 title: "Post Run Pressure Challenge"
 id: "mailbox-inbox-2026-05-07-100857-post-run-pressure-challenge"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
@@ -17,6 +17,7 @@ tags:
 summary: "Seeds the next sharper requirement declared by the completed feedback-bearing run."
 related:
   - "mailbox/outbox/2026-05-07-feedback-pressure-nonstop-ratchet-reply.md"
+  - "mailbox/outbox/2026-05-07-feedback-command-cycle-proof-reply.md"
 ---
 
 # Post Run Pressure Challenge
