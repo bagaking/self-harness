@@ -31,6 +31,7 @@ git diff --name-status origin/main..HEAD
    - Convert the feedback into one sharper future requirement: a deterministic gate, a skill step, a memory decision with a rerunnable query and trigger, a focused experiment, or a justified refusal with a smaller alternative.
    - State the worked signal a future supervisor can inspect, such as a matching query result, validation command, mailbox acceptance criterion, or next-run behavior.
    - In the supervisor-facing outbox, include exactly one feedback-continuity path: either one concrete `Next supervisor pressure:` line, or one `No next supervisor pressure:` refusal that says why further escalation would be noisy and includes exactly one concrete `Supervisor evaluation trigger:` plus a `Smaller useful task:` or `Stop condition:`.
+   - When evaluating prior trigger-backed refusals, run `scripts/supervisor.sh triggers --status review` or `scripts/supervisor-evaluation-trigger-list.sh --status review` to list recent `Supervisor evaluation trigger:` lines with later durable evidence before treating a clean mailbox as enough.
    - For feedback-bearing mailbox work, expect `scripts/feedback-escalation-check.sh` to pass before handoff. If escalation would add noise, write the refusal and smaller alternative in the outbox instead of adding a generic challenge.
    - Default return-to-main judgment to `no` for branch-local pressure mechanisms unless evidence shows broad value and no plausible family-wide downside.
 

@@ -109,6 +109,7 @@ Usage:
   scripts/supervisor.sh once
   scripts/supervisor.sh loop
   scripts/supervisor.sh feedback [-F FILE] [--] FEEDBACK...
+  scripts/supervisor.sh triggers [--limit N] [--evidence-limit N] [--status all|review|quiet]
   scripts/supervisor.sh commit [--allow-constitution] [-m MESSAGE | -F FILE] [-- PATH...]
   scripts/supervisor.sh start
   scripts/supervisor.sh stop
@@ -568,6 +569,11 @@ create_feedback_pressure_challenge() {
 
   write_feedback_pressure_challenge "$id" "$branch" "$date_value" "$feedback"
   log "seeded feedback pressure challenge: mailbox/inbox/${id}.md"
+}
+
+list_supervisor_evaluation_triggers() {
+  init_layout
+  "${ROOT_DIR}/scripts/supervisor-evaluation-trigger-list.sh" "$@"
 }
 
 changed_outbox_files_with_next_pressure_marker() {
@@ -1822,6 +1828,10 @@ case "${1:-}" in
   feedback)
     shift
     create_feedback_pressure_challenge "$@"
+    ;;
+  triggers)
+    shift
+    list_supervisor_evaluation_triggers "$@"
     ;;
   start)
     start_background
