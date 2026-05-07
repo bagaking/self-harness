@@ -6,6 +6,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 required_fields=(id title type status owner created updated tags summary)
 errors=0
+markdown_files=()
 
 error() {
   echo "docs-check: $*" >&2
@@ -26,7 +27,7 @@ frontmatter() {
 
 field_exists() {
   local field="$1"
-  rg -q "^${field}:" <<<"$2"
+  grep -q "^${field}:" <<<"$2"
 }
 
 extract_id() {
@@ -70,11 +71,7 @@ check_no_forbidden_indexes() {
         error "${rel}: manual index files are forbidden; use scripts/query-docs.sh"
         ;;
     esac
-  done < <(find "$ROOT_DIR" \
-    -path "$ROOT_DIR/.git" -prune -o \
-    -path "$ROOT_DIR/.codex" -prune -o \
-    -path "$ROOT_DIR/.self-harness" -prune -o \
-    -type f -name '*.md' -print)
+  done < <(printf '%s\n' "${markdown_files[@]}")
 }
 
 check_no_constitution_symlinks() {
@@ -92,12 +89,8 @@ check_no_patch_sentinels() {
     local rel="${file#${ROOT_DIR}/}"
     while IFS= read -r match; do
       error "${rel}:${match}: patch-editor sentinel line found"
-    done < <(LC_ALL=C rg -n --color never --no-heading '^\*\*\* (Begin|End) Patch$' "$file" || true)
-  done < <(find "$ROOT_DIR" \
-    -path "$ROOT_DIR/.git" -prune -o \
-    -path "$ROOT_DIR/.codex" -prune -o \
-    -path "$ROOT_DIR/.self-harness" -prune -o \
-    -type f -name '*.md' -print)
+    done < <(LC_ALL=C awk '/^\*\*\* (Begin|End) Patch$/ { print FNR ":" $0 }' "$file")
+  done < <(printf '%s\n' "${markdown_files[@]}")
 }
 
 check_duplicate_ids() {
@@ -112,16 +105,12 @@ check_duplicate_ids() {
     id="$(extract_id "$fm")"
     [ -n "$id" ] || continue
     rel="${file#${ROOT_DIR}/}"
-    if rg -q "^${id} " "$seen_file"; then
+    if grep -q "^${id} " "$seen_file"; then
       error "${rel}: duplicate frontmatter id '${id}'"
     else
       printf '%s %s\n' "$id" "$rel" >>"$seen_file"
     fi
-  done < <(find "$ROOT_DIR" \
-    -path "$ROOT_DIR/.git" -prune -o \
-    -path "$ROOT_DIR/.codex" -prune -o \
-    -path "$ROOT_DIR/.self-harness" -prune -o \
-    -type f -name '*.md' -print)
+  done < <(printf '%s\n' "${markdown_files[@]}")
 }
 
 check_layout() {
@@ -132,12 +121,16 @@ check_layout() {
 }
 
 while IFS= read -r file; do
-  check_markdown_file "$file"
+  markdown_files+=("$file")
 done < <(find "$ROOT_DIR" \
   -path "$ROOT_DIR/.git" -prune -o \
   -path "$ROOT_DIR/.codex" -prune -o \
   -path "$ROOT_DIR/.self-harness" -prune -o \
   -type f -name '*.md' -print)
+
+while IFS= read -r file; do
+  check_markdown_file "$file"
+done < <(printf '%s\n' "${markdown_files[@]}")
 
 check_no_forbidden_indexes
 check_no_constitution_symlinks

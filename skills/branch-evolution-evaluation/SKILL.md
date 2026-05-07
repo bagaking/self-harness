@@ -33,6 +33,7 @@ git diff --name-status origin/main..HEAD
    - In the supervisor-facing outbox, include exactly one feedback-continuity path: either one concrete `Next supervisor pressure:` line, or one `No next supervisor pressure:` refusal that says why further escalation would be noisy and includes exactly one concrete `Supervisor evaluation trigger:` plus a `Smaller useful task:` or `Stop condition:`.
    - When evaluating prior trigger-backed refusals, run `scripts/supervisor.sh triggers --status review` or `scripts/supervisor-evaluation-trigger-list.sh --status review` to list recent `Supervisor evaluation trigger:` lines with later durable evidence before treating a clean mailbox as enough.
    - When feedback is about pending-inbox claim latency, run `scripts/supervisor.sh claim-latency <session>` or `scripts/pending-inbox-claim-latency-check.sh <session>` against the relevant session transcript. Treat pre-claim broad discovery or a delayed first claim as evidence that the loop still stops too easily.
+   - When feedback is about completed-record overwrites, run `scripts/supervisor.sh completed-records` or `scripts/completed-record-overwrite-check.sh` against the active worktree and prove changes with `scripts/completed-record-overwrite-fixture-check.sh`. Treat modifications to tracked `mailbox/outbox/*.md` or `memory/diary/*.md` as evidence that the run reused historical records instead of creating unique current-run files.
    - For feedback-bearing mailbox work, expect `scripts/feedback-escalation-check.sh` to pass before handoff. If escalation would add noise, write the refusal and smaller alternative in the outbox instead of adding a generic challenge.
    - Default return-to-main judgment to `no` for branch-local pressure mechanisms unless evidence shows broad value and no plausible family-wide downside.
 
@@ -66,6 +67,7 @@ git diff --cached --quiet -- constitution/
 test -z "$(git ls-files --others --exclude-standard -- constitution/)"
 scripts/proof-pressure-check.sh
 scripts/feedback-escalation-check.sh
+scripts/completed-record-overwrite-check.sh
 scripts/shell-syntax-check.sh
 scripts/docs-check.sh
 ```

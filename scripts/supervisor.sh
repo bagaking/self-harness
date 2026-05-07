@@ -111,6 +111,7 @@ Usage:
   scripts/supervisor.sh feedback [-F FILE] [--] FEEDBACK...
   scripts/supervisor.sh triggers [--limit N] [--evidence-limit N] [--status all|review|quiet]
   scripts/supervisor.sh claim-latency [--max-seconds N] [SESSION...]
+  scripts/supervisor.sh completed-records
   scripts/supervisor.sh commit [--allow-constitution] [-m MESSAGE | -F FILE] [-- PATH...]
   scripts/supervisor.sh start
   scripts/supervisor.sh stop
@@ -582,6 +583,11 @@ check_pending_inbox_claim_latency() {
   "${ROOT_DIR}/scripts/pending-inbox-claim-latency-check.sh" "$@"
 }
 
+check_completed_record_overwrite() {
+  init_layout
+  "${ROOT_DIR}/scripts/completed-record-overwrite-check.sh" "$@"
+}
+
 changed_outbox_files_with_next_pressure_marker() {
   local rel file
   while IFS= read -r rel; do
@@ -919,6 +925,8 @@ run_commit_gate() {
   fi
 
   check_portable_content || return $?
+
+  "${ROOT_DIR}/scripts/completed-record-overwrite-check.sh" || return $?
 
   "${ROOT_DIR}/scripts/pending-inbox-session-only-check.sh" || return $?
 
@@ -1842,6 +1850,10 @@ case "${1:-}" in
   claim-latency)
     shift
     check_pending_inbox_claim_latency "$@"
+    ;;
+  completed-records)
+    shift
+    check_completed_record_overwrite "$@"
     ;;
   start)
     start_background
