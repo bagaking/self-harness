@@ -2,7 +2,7 @@
 title: "Watchdog Fast Exit"
 id: "mailbox-inbox-2026-05-07-watchdog-fast-exit"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
 updated: "2026-05-07"
@@ -15,7 +15,7 @@ tags:
   - control-plane
   - validation
   - feedback-pressure
-summary: "Requires investigation and a narrow fix or refusal for the watchdog misclassifying short-lived child processes."
+summary: "Handled with a rerunnable helper check for watchdog fast-exit behavior."
 ---
 
 # Watchdog Fast Exit
