@@ -42,6 +42,17 @@ score() {
   printf '%s %s: %s\n' "$status" "$criterion" "$detail"
 }
 
+require_file() {
+  local rel="$1"
+
+  if [ -f "${ROOT_DIR}/${rel}" ]; then
+    score "pass" "promotion-file" "${rel} exists"
+  else
+    score "fail" "promotion-file" "missing ${rel}"
+    return 1
+  fi
+}
+
 count_supersedes_links() {
   local memory_dir="${ROOT_DIR}/memory"
 
@@ -352,6 +363,74 @@ EOF
   [ "$actual" = "1" ]
 }
 
+check_promotion_focused() {
+  local failures=0
+
+  require_file "scripts/memory-evaluation-check.sh" || failures=$((failures + 1))
+  require_file "scripts/memory-evaluation-fixture-check.sh" || failures=$((failures + 1))
+  require_file "scripts/memory-evaluation-conflict-fixture-check.sh" || failures=$((failures + 1))
+  require_file "skills/memory-evaluation/SKILL.md" || failures=$((failures + 1))
+  require_file "memory/decisions/2026-05-08-memory-supersedes-link-evaluation.md" || failures=$((failures + 1))
+  require_file "memory/decisions/2026-05-08-memory-conflict-fixture-evaluation.md" || failures=$((failures + 1))
+
+  if [ "$failures" -ne 0 ]; then
+    return 1
+  fi
+
+  if bash "${ROOT_DIR}/scripts/memory-evaluation-fixture-check.sh" >/dev/null; then
+    score "pass" "promotion-freshness-fixture" "supersedes fixture command passes"
+  else
+    score "fail" "promotion-freshness-fixture" "supersedes fixture command failed"
+    failures=$((failures + 1))
+  fi
+
+  if bash "${ROOT_DIR}/scripts/memory-evaluation-conflict-fixture-check.sh" >/dev/null; then
+    score "pass" "promotion-conflict-fixture" "conflict fixture command passes"
+  else
+    score "fail" "promotion-conflict-fixture" "conflict fixture command failed"
+    failures=$((failures + 1))
+  fi
+
+  if check_conflict_fixture; then
+    score "pass" "promotion-conflict-subcommand" "embedded conflict fixture subcommand passes"
+  else
+    score "fail" "promotion-conflict-subcommand" "embedded conflict fixture subcommand failed"
+    failures=$((failures + 1))
+  fi
+
+  if query_has_path memory "memory supersedes link evaluation" "memory/decisions/2026-05-08-memory-supersedes-link-evaluation.md"; then
+    score "pass" "promotion-recall" "supersedes decision is discoverable"
+  else
+    score "fail" "promotion-recall" "supersedes decision is not discoverable"
+    failures=$((failures + 1))
+  fi
+
+  if query_has_path memory "memory conflict fixture evaluation" "memory/decisions/2026-05-08-memory-conflict-fixture-evaluation.md"; then
+    score "pass" "promotion-recall" "conflict decision is discoverable"
+  else
+    score "fail" "promotion-recall" "conflict decision is not discoverable"
+    failures=$((failures + 1))
+  fi
+
+  if query_has_path skills "conflict-handling evaluator" "skills/memory-evaluation/SKILL.md"; then
+    score "pass" "promotion-skill-recall" "memory-evaluation skill is discoverable"
+  else
+    score "fail" "promotion-skill-recall" "memory-evaluation skill is not discoverable"
+    failures=$((failures + 1))
+  fi
+
+  if query_has_path skills "promotion-focused memory evaluation" "skills/memory-evaluation/SKILL.md"; then
+    score "pass" "promotion-skill-recall" "promotion-focused memory evaluation guidance is discoverable"
+  else
+    score "fail" "promotion-skill-recall" "promotion-focused memory evaluation guidance is not discoverable"
+    failures=$((failures + 1))
+  fi
+
+  score "pass" "promotion-scope" "focused mode does not require branch-only historical memory evidence"
+
+  [ "$failures" -eq 0 ]
+}
+
 main() {
   local missing=0
   local failures=0
@@ -449,6 +528,9 @@ case "${1:-}" in
       echo "memory-evaluation-check: conflict fixture failed" >&2
       exit 1
     fi
+    ;;
+  --promotion-focused)
+    check_promotion_focused
     ;;
   *)
     main "$@"

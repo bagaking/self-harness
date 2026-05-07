@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-WORK_DIR="${ROOT_DIR}/.self-harness/tmp/memory-evaluation-conflict-fixture-check"
+WORK_DIR="${ROOT_DIR}/.self-harness/tmp/memory-evaluation-conflict-fixture-check-$$"
 
 fail() {
   echo "memory-evaluation-conflict-fixture-check: $*" >&2
@@ -123,6 +123,7 @@ expect_count() {
 
 main() {
   mkdir -p "$WORK_DIR"
+  trap 'rm -rf "$WORK_DIR"' EXIT
 
   expect_count reciprocal-contradiction 1
   expect_count same-value 0

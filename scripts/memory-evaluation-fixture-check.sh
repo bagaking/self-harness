@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-WORK_DIR="${ROOT_DIR}/.self-harness/tmp/memory-evaluation-fixture-check"
+WORK_DIR="${ROOT_DIR}/.self-harness/tmp/memory-evaluation-fixture-check-$$"
 
 fail() {
   echo "memory-evaluation-fixture-check: $*" >&2
@@ -122,6 +122,7 @@ EOF
 
 main() {
   mkdir -p "$WORK_DIR"
+  trap 'rm -rf "$WORK_DIR"' EXIT
 
   expect_count empty-supersedes-list 0
   expect_count body-supersedes-snippet 0
