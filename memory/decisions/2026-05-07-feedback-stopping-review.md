@@ -21,14 +21,19 @@ related:
   - "mailbox-inbox-2026-05-07-153204-post-run-pressure-challenge"
   - "mailbox-inbox-2026-05-07-154303-post-run-pressure-challenge"
   - "mailbox-inbox-2026-05-07-155842-commit-gate-pressure-challenge"
+  - "mailbox-inbox-2026-05-07-161843-post-run-pressure-challenge"
   - "decision-2026-05-07-feedback-escalation-check"
+  - "decision-2026-05-07-supervisor-stable-copy-launcher"
+  - "decision-2026-05-07-supervisor-bootstrap-and-syntax-gate"
   - "mailbox-outbox-2026-05-07-supervisor-evaluation-trigger-list-reply"
   - "mailbox-outbox-2026-05-07-151827-feedback-pressure-challenge-reply"
   - "mailbox-outbox-2026-05-07-150717-post-run-pressure-challenge-reply"
   - "mailbox-outbox-2026-05-07-225840-gate-promotion-negative-evidence-reply"
   - "mailbox-outbox-2026-05-08-commit-gate-pressure-challenge-reply"
+  - "mailbox-outbox-2026-05-08-post-run-pressure-challenge-reply"
   - "scripts/run-linked-feedback-map-check.sh"
   - "scripts/run-linked-feedback-map-fixture-check.sh"
+  - "scripts/supervisor-stable-copy-check.sh"
 ---
 
 # Feedback Stopping Review
@@ -88,6 +93,13 @@ Fresh supervisor feedback on `mailbox/inbox/2026-05-07-155842-commit-gate-pressu
 
 `scripts/run-linked-feedback-map-fixture-check.sh` now includes a supervisor commit-path negative case. It builds a scratch repository under `.self-harness/tmp/run-linked-feedback-map-check/`, writes a changed feedback-bearing outbox that satisfies the general feedback-escalation structure but intentionally omits the run-linked map, runs `scripts/supervisor.sh commit`, and asserts that no commit is created and the failure comes from `scripts/run-linked-feedback-map-check.sh`.
 
+Fresh supervisor feedback on `mailbox/inbox/2026-05-07-161843-post-run-pressure-challenge.md` checked the real post-run commit report for the `b70019a` commit that introduced the supervisor gate wiring. `.self-harness/tmp/commit-gate-last-report.md` did not contain `run-linked-feedback-map-check: ok`; it only contained `shell-syntax-check: ok scripts/run-linked-feedback-map-check.sh`.
+
+That absence reopens the mechanism, but the cause is narrower than "the checked-out source is missing the call." `scripts/supervisor.sh` now contains the `run_commit_gate` call, while `decision-2026-05-07-supervisor-stable-copy-launcher` explains that Codex-launching commands commit from the launch-time stable supervisor copy. A same-run edit to `scripts/supervisor.sh` therefore cannot prove the newly checked-out gate in that same commit report. The proof boundary is now two-step:
+
+1. `scripts/supervisor-stable-copy-check.sh` proves that a stable-copy loop exits after a valid checked-out supervisor source change so the next launch activates the new source.
+2. The next checked-out supervisor post-run commit report must emit `run-linked-feedback-map-check: ok`, not merely shell syntax validation for the checker.
+
 ## Evidence To Inspect
 
 Future supervisors should inspect these signals before accepting a feedback-bearing stop:
@@ -97,6 +109,7 @@ Future supervisors should inspect these signals before accepting a feedback-bear
 - The latest three supervisor-facing `mailbox/outbox/*.md` reports linked from those run commits, especially their current weakness, anti-noise boundary, validation, and return-to-main sections.
 - The current feedback-bearing outbox report for exactly one continuity path: either a concrete `Next supervisor pressure:` line or a bounded local refusal accepted by `scripts/feedback-escalation-check.sh`.
 - `scripts/run-linked-feedback-map-check.sh` when the current changed outbox cites this skill, `run-linked`, latest supervisor-facing reports, or `No next supervisor pressure:`.
+- `scripts/supervisor-stable-copy-check.sh` when a feedback-pressure run asks whether a same-run `scripts/supervisor.sh` gate edit should already appear in the real commit-gate report.
 - Any memory decision or skill change cited as the mechanism, discovered through `scripts/query-docs.sh memory "feedback stopping review"` or a similarly specific query.
 
 ## Rerunnable Probe
@@ -108,11 +121,12 @@ scripts/query-docs.sh memory "feedback stopping review"
 scripts/query-docs.sh skills "run-linked"
 scripts/run-linked-feedback-map-check.sh
 scripts/run-linked-feedback-map-fixture-check.sh
+scripts/supervisor-stable-copy-check.sh
 scripts/supervisor.sh triggers --status review
 scripts/feedback-escalation-check.sh
 ```
 
-The first command must find this decision. The run-linked map checker must fire on the target outbox when this rule is cited. The fixture should be rerun after any edit to the checker, the branch-evaluation skill's run-linked requirement, or the supervisor commit-gate wiring. The trigger command should be reviewed before accepting a local refusal as enough. The feedback escalation check must pass before handoff for changed feedback-bearing mailbox work.
+The first command must find this decision. The run-linked map checker must fire on the target outbox when this rule is cited. The fixture should be rerun after any edit to the checker, the branch-evaluation skill's run-linked requirement, or the supervisor commit-gate wiring. The stable-copy check should be rerun when a same-run supervisor self-edit creates ambiguity about which supervisor body produced a commit report. The trigger command should be reviewed before accepting a local refusal as enough. The feedback escalation check must pass before handoff for changed feedback-bearing mailbox work.
 
 ## Return-To-Main Judgment
 

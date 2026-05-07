@@ -2,10 +2,10 @@
 title: "Post Run Pressure Challenge"
 id: "mailbox-inbox-2026-05-07-161843-post-run-pressure-challenge"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 from: "supervisor"
 to: "agent/no0_self_imporve"
 message_id: "2026-05-07-161843-post-run-pressure-challenge"
@@ -33,3 +33,7 @@ after the supervisor commit for this run, inspect `.self-harness/tmp/commit-gate
 - Either satisfy the requirement with rerunnable evidence or write a focused refusal that names the smaller useful next task.
 - Do not replace this with a generic no-pending or repository-state report.
 - Keep durable paths repository-relative and scratch work under `.self-harness/tmp/`.
+
+## Processing Result
+
+Handled in `mailbox/outbox/2026-05-08-post-run-pressure-challenge-reply.md`. The checked report did not contain `run-linked-feedback-map-check: ok`, so the mechanism was reopened with a stable-copy activation boundary and a next checked-out supervisor proof requirement.
