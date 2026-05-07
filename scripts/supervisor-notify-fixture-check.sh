@@ -52,7 +52,7 @@ run_positive_fake_send() {
       PATH="${fake_bin}:${PATH}" \
       SELF_HARNESS_SUPERVISOR_ROOT="$sandbox" \
       SELF_HARNESS_FAKE_LARK_LOG="$fake_log" \
-      SELF_HARNESS_NOTIFY_CHAT_ID="oc_fixture_chat" \
+      SELF_HARNESS_NOTIFY_CHAT_ID="fixture-chat-id" \
       bash "${ROOT_DIR}/scripts/supervisor-notify.sh" \
         --event start \
         --status running \
@@ -64,7 +64,7 @@ run_positive_fake_send() {
   LC_ALL=C rg -q 'arg_01=im' "$fake_log" || fail "fake lark command did not use im"
   LC_ALL=C rg -q 'arg_02=\+messages-send' "$fake_log" || fail "fake lark command did not use +messages-send"
   LC_ALL=C rg -q 'arg_[0-9]+=--chat-id' "$fake_log" || fail "fake lark command did not include --chat-id"
-  LC_ALL=C rg -q 'arg_[0-9]+=oc_fixture_chat' "$fake_log" || fail "fake lark command did not include fixture chat id"
+  LC_ALL=C rg -q 'arg_[0-9]+=fixture-chat-id' "$fake_log" || fail "fake lark command did not include fixture chat id"
   LC_ALL=C rg -q -- '--- supervisor for @no\.0\|agent/no0_self_imporve' "$fake_log" || fail "fake lark message missed no0 supervisor signature"
   LC_ALL=C rg -q 'Event: start' "$fake_log" || fail "fake lark message missed event"
   LC_ALL=C rg -q 'Status: running' "$fake_log" || fail "fake lark message missed status"
@@ -124,7 +124,7 @@ run_missing_lark_case() {
     env \
       SELF_HARNESS_SUPERVISOR_ROOT="$sandbox" \
       SELF_HARNESS_NOTIFY_LARK_BIN="definitely-missing-lark-cli" \
-      SELF_HARNESS_NOTIFY_CHAT_ID="oc_fixture_chat" \
+      SELF_HARNESS_NOTIFY_CHAT_ID="fixture-chat-id" \
       bash "${ROOT_DIR}/scripts/supervisor-notify.sh" \
         --event failure \
         --status failed \
