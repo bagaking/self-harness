@@ -17,6 +17,10 @@ The path list must name candidate gene files only. Branch-local mailbox,
 diary, session, birth, incident, and attachment-review records are rejected
 so a clean candidate check cannot be mistaken for proof that the whole branch
 diff is clean.
+
+Each path must exist as a file in HEAD and be part of the branch candidate
+surface against origin/main. Missing, unchanged, deleted, directory-only, or
+branch-local evidence paths are rejected before the whitespace check runs.
 EOF
 }
 
@@ -65,6 +69,24 @@ reject_path() {
   esac
 }
 
+require_candidate_surface_file() {
+  local rel="$1"
+  local object_type
+
+  if ! git -C "$ROOT_DIR" cat-file -e "HEAD:${rel}" 2>/dev/null; then
+    fail "candidate path is not present in HEAD: ${rel}"
+  fi
+
+  object_type="$(git -C "$ROOT_DIR" cat-file -t "HEAD:${rel}")"
+  if [ "$object_type" != "blob" ]; then
+    fail "candidate path must name a file in HEAD: ${rel}"
+  fi
+
+  if ! git -C "$ROOT_DIR" diff --name-only --diff-filter=ACMRT origin/main...HEAD -- "$rel" | rg -F -x -q -- "$rel"; then
+    fail "candidate path is not part of the branch candidate surface: ${rel}"
+  fi
+}
+
 main() {
   if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
     usage
@@ -77,10 +99,12 @@ main() {
   }
 
   local rel path
+  local -a paths
   paths=()
   for path in "$@"; do
     rel="$(repo_relative_path "$path")"
     reject_path "$rel"
+    require_candidate_surface_file "$rel"
     paths+=("$rel")
   done
 

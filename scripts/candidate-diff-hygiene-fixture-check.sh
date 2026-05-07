@@ -120,8 +120,70 @@ check_negative_branch_local_path() {
   log "negative branch-local record path was rejected"
 }
 
+check_negative_missing_candidate_path() {
+  local sandbox log_file status
+  sandbox="${WORK_DIR}/missing-candidate"
+  log_file="${WORK_DIR}/missing-candidate.log"
+  prepare_sandbox "$sandbox"
+
+  printf '%s\n' 'candidate helper' >"$sandbox/scripts/helper.sh"
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: clean candidate"
+
+  set +e
+  (
+    cd "$sandbox"
+    scripts/candidate-diff-hygiene-check.sh scripts/does-not-exist.sh
+  ) >"$log_file" 2>&1
+  status=$?
+  set -e
+
+  [ "$status" -ne 0 ] || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "missing candidate path unexpectedly passed"
+  }
+
+  rg -q 'candidate path is not present in HEAD: scripts/does-not-exist.sh' "$log_file" || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "missing candidate rejection did not name the path"
+  }
+  log "negative missing candidate path was rejected"
+}
+
+check_negative_unchanged_candidate_path() {
+  local sandbox log_file status
+  sandbox="${WORK_DIR}/unchanged-candidate"
+  log_file="${WORK_DIR}/unchanged-candidate.log"
+  prepare_sandbox "$sandbox"
+
+  printf '%s\n' 'branch-only helper' >"$sandbox/scripts/helper.sh"
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: separate changed candidate"
+
+  set +e
+  (
+    cd "$sandbox"
+    scripts/candidate-diff-hygiene-check.sh README.md
+  ) >"$log_file" 2>&1
+  status=$?
+  set -e
+
+  [ "$status" -ne 0 ] || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "unchanged candidate path unexpectedly passed"
+  }
+
+  rg -q 'candidate path is not part of the branch candidate surface: README.md' "$log_file" || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "unchanged candidate rejection did not name the path"
+  }
+  log "negative unchanged existing path was rejected"
+}
+
 check_positive_clean_candidate_with_dirty_branch_record
 check_negative_dirty_candidate
 check_negative_branch_local_path
+check_negative_missing_candidate_path
+check_negative_unchanged_candidate_path
 
 log "ok"
