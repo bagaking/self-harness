@@ -112,6 +112,7 @@ Usage:
   scripts/supervisor.sh triggers [--limit N] [--evidence-limit N] [--status all|review|quiet]
   scripts/supervisor.sh claim-latency [--max-seconds N] [SESSION...]
   scripts/supervisor.sh completed-records
+  scripts/supervisor.sh docs-fixture
   scripts/supervisor.sh commit [--allow-constitution] [-m MESSAGE | -F FILE] [-- PATH...]
   scripts/supervisor.sh start
   scripts/supervisor.sh stop
@@ -586,6 +587,11 @@ check_pending_inbox_claim_latency() {
 check_completed_record_overwrite() {
   init_layout
   "${ROOT_DIR}/scripts/completed-record-overwrite-check.sh" "$@"
+}
+
+check_docs_fixture() {
+  init_layout
+  "${ROOT_DIR}/scripts/docs-check-fixture-check.sh" "$@"
 }
 
 changed_outbox_files_with_next_pressure_marker() {
@@ -1854,6 +1860,10 @@ case "${1:-}" in
   completed-records)
     shift
     check_completed_record_overwrite "$@"
+    ;;
+  docs-fixture)
+    shift
+    check_docs_fixture "$@"
     ;;
   start)
     start_background
