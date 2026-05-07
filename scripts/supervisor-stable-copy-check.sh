@@ -99,12 +99,7 @@ prepare_common_sandbox() {
     "${sandbox}/bin"
 
   cp "${ROOT_DIR}/constitution/"*.md "${sandbox}/constitution/"
-  cp "${ROOT_DIR}/scripts/supervisor.sh" "${sandbox}/scripts/supervisor.sh"
-  cp "${ROOT_DIR}/scripts/init.sh" "${sandbox}/scripts/init.sh"
-  cp "${ROOT_DIR}/scripts/docs-check.sh" "${sandbox}/scripts/docs-check.sh"
-  cp "${ROOT_DIR}/scripts/feedback-escalation-check.sh" "${sandbox}/scripts/feedback-escalation-check.sh"
-  cp "${ROOT_DIR}/scripts/proof-pressure-check.sh" "${sandbox}/scripts/proof-pressure-check.sh"
-  cp "${ROOT_DIR}/scripts/shell-syntax-check.sh" "${sandbox}/scripts/shell-syntax-check.sh"
+  cp "${ROOT_DIR}/scripts/"*.sh "${sandbox}/scripts/"
 }
 
 write_frontmatter_mailbox_message() {
