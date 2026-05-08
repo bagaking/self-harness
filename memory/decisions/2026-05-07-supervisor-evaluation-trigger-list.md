@@ -5,7 +5,7 @@ type: "memory"
 status: "active"
 owner: "agent"
 created: "2026-05-07"
-updated: "2026-05-07"
+updated: "2026-05-08"
 tags:
   - decision
   - supervisor
@@ -20,6 +20,7 @@ related:
   - "mailbox-outbox-2026-05-07-feedback-refusal-trigger-reply"
   - "mailbox-inbox-2026-05-07-124332-feedback-pressure-challenge"
   - "mailbox-outbox-2026-05-07-124332-trigger-evidence-precision-reply"
+  - "mailbox-inbox-2026-05-08-020741-trigger-review-pressure-challenge"
   - "scripts/supervisor-evaluation-trigger-list.sh"
   - "scripts/supervisor-evaluation-trigger-list-check.sh"
 ---
@@ -42,6 +43,8 @@ The command scans recent `mailbox/outbox/*.md` reports with both `No next superv
 Feedback from `mailbox/inbox/2026-05-07-124332-feedback-pressure-challenge.md` showed that the first evidence matcher lowered the proof bar by treating standalone prose words from a trigger sentence as evidence. A completed-record refusal was marked `review-evidence` from generic later words such as `creating`, `modified`, and `instead`.
 
 The matcher now uses only concrete backticked trigger terms that look like commands, paths, patterns, or multiword phrases. It no longer falls back to generic prose tokens. For tracked files that already existed when the trigger source was committed, it searches only later-added lines instead of the whole current file, so an unrelated edit cannot get credit from an old matching term already present in the file. The trigger-list implementation and fixture scripts are also excluded from live evidence candidates so regression examples in the proof code cannot make a trigger look fired.
+
+On 2026-05-08 the trigger-review pressure chain exposed a second false-positive class. Trigger-review refusal templates backtick scaffold terms such as `trigger-review-source:`, mailbox lifecycle directories, and `scripts/supervisor.sh triggers --status review`. Those citations are instructions for evaluating pressure, not concrete proof that a prior trigger condition fired. The matcher now ignores that scaffold so a lifecycle marker or command citation alone cannot keep generating follow-up trigger-review challenges.
 
 ## Why
 
@@ -66,6 +69,7 @@ The fixture proves these cases:
 - uncommitted trigger-source outboxes stay quiet until they have a source commit.
 - generic prose words from the completed-record trigger do not create review evidence;
 - old matching terms in an existing file do not count after an unrelated later edit.
+- trigger-review scaffold-only lifecycle evidence does not create review evidence.
 
 Live evidence on this branch: `scripts/supervisor.sh triggers --limit 5 --status review` surfaced `mailbox/outbox/2026-05-07-feedback-refusal-trigger-reply.md` and pointed to later durable evidence from this run. `scripts/supervisor.sh triggers --limit 5 --status quiet` listed this run's uncommitted trigger-source reply as `no-later-evidence`, which keeps same-run notes from masquerading as later proof before the supervisor commit exists.
 

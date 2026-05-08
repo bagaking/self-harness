@@ -422,6 +422,85 @@ SCRIPT
   log "ignores old trigger terms in existing files after unrelated edits"
 }
 
+check_ignores_trigger_review_scaffold_only_terms() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-scaffold"
+  log_file="${WORK_DIR}/trigger-review-scaffold.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-trigger-review-refusal.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-trigger-review-refusal"
+title: "Trigger Review Refusal"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "trigger-review-refusal"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal with scaffold-only trigger terms."
+related: []
+---
+
+# Trigger Review Refusal
+
+No next supervisor pressure: further escalation would be noisy because every actionable source is already lifecycle-covered.
+
+Supervisor evaluation trigger: run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3`; if it lists a `review-evidence` source with no matching `trigger-review-source:` marker anywhere under `mailbox/inbox`, `mailbox/processing`, `mailbox/done`, `mailbox/failed`, or `mailbox/outbox`, issue one defect-specific trigger-review activation challenge.
+
+Stop condition: if every actionable source is already marked, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: trigger review scaffold refusal"
+
+  cat >"${sandbox}/mailbox/done/2026-05-08-trigger-review-pressure-challenge.md" <<'DONE'
+---
+id: "mailbox-done-trigger-review-pressure-challenge"
+title: "Trigger Review Pressure Challenge"
+type: "mailbox-inbox"
+status: "done"
+owner: "supervisor"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "supervisor"
+to: "agent/trigger-list-check"
+message_id: "trigger-review-pressure-challenge"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture lifecycle marker for trigger-review source."
+related:
+  - "mailbox/outbox/2026-05-08-trigger-review-refusal.md"
+trigger-review-source: "mailbox/outbox/2026-05-08-trigger-review-refusal.md"
+---
+
+# Trigger Review Pressure Challenge
+
+trigger-review-source: mailbox/outbox/2026-05-08-trigger-review-refusal.md
+The mailbox lifecycle marker mentions mailbox/inbox, mailbox/processing, mailbox/done, mailbox/failed, and mailbox/outbox only as scaffold.
+It also says to run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3`, but that command citation is trigger-review scaffold rather than concrete evidence that the prior trigger fired.
+DONE
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "trigger-review scaffold terms should not create review evidence"
+  }
+  log "ignores trigger-review scaffold-only lifecycle evidence"
+}
+
 main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
@@ -432,6 +511,7 @@ main() {
   check_uncommitted_trigger_stays_quiet
   check_ignores_generic_words_from_completed_record_trigger
   check_existing_file_old_term_does_not_count_after_unrelated_edit
+  check_ignores_trigger_review_scaffold_only_terms
   log "ok"
 }
 

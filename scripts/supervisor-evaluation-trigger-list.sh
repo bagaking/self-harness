@@ -162,18 +162,36 @@ write_trigger_needles() {
   local out_file="$2"
 
   printf '%s\n' "$trigger" | awk '
+    function is_ignored_needle(lower_value) {
+      if (lower_value == "no next supervisor pressure:" ||
+          lower_value == "supervisor evaluation trigger:" ||
+          lower_value == "next supervisor pressure:" ||
+          lower_value == "task_complete" ||
+          lower_value == "review-evidence" ||
+          lower_value == "trigger-review-source:" ||
+          lower_value == "mailbox/inbox" ||
+          lower_value == "mailbox/processing" ||
+          lower_value == "mailbox/done" ||
+          lower_value == "mailbox/failed" ||
+          lower_value == "mailbox/outbox") {
+        return 1
+      }
+      if (lower_value ~ /^scripts\/supervisor\.sh[[:space:]]+triggers/ &&
+          lower_value ~ /--status[[:space:]]+review/) {
+        return 1
+      }
+      if (lower_value ~ /^scripts\/supervisor-evaluation-trigger-list\.sh/ &&
+          lower_value ~ /--status[[:space:]]+review/) {
+        return 1
+      }
+      return 0
+    }
     {
       text = $0
       while (match(text, /`[^`]+`/)) {
         value = substr(text, RSTART + 1, RLENGTH - 2)
         lower_value = tolower(value)
-        if (length(value) > 0 &&
-            lower_value != "no next supervisor pressure:" &&
-            lower_value != "supervisor evaluation trigger:" &&
-            lower_value != "next supervisor pressure:" &&
-            lower_value != "task_complete" &&
-            lower_value != "review-evidence" &&
-            value ~ /[.\/:_ -]/) {
+        if (length(value) > 0 && !is_ignored_needle(lower_value) && value ~ /[.\/:_ -]/) {
           print value
         }
         text = substr(text, RSTART + RLENGTH)
