@@ -31,6 +31,7 @@ DEFAULT_CODEX_MAX_RUNTIME_SECONDS=1800
 DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS=300
 DEFAULT_CODEX_WATCHDOG_POLL_SECONDS=10
 DEFAULT_AUTO_CHALLENGE=1
+DEFAULT_TRIGGER_REVIEW_LIMIT=8
 NEXT_PRESSURE_MARKER_PATTERN='^Next supervisor pressure:[[:space:]]*.'
 STATUS_NOTIFY_DEDUP_FILE="${RUN_DIR}/supervisor-notify-last-key"
 
@@ -47,6 +48,7 @@ CODEX_MAX_RUNTIME_SECONDS="${SELF_HARNESS_CODEX_MAX_RUNTIME_SECONDS:-$DEFAULT_CO
 CODEX_IDLE_TIMEOUT_SECONDS="${SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS:-$DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS}"
 CODEX_WATCHDOG_POLL_SECONDS="${SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS:-$DEFAULT_CODEX_WATCHDOG_POLL_SECONDS}"
 AUTO_CHALLENGE="${SELF_HARNESS_AUTO_CHALLENGE:-$DEFAULT_AUTO_CHALLENGE}"
+TRIGGER_REVIEW_LIMIT="${SELF_HARNESS_TRIGGER_REVIEW_LIMIT:-$DEFAULT_TRIGGER_REVIEW_LIMIT}"
 
 command_needs_stable_supervisor() {
   case "${1:-}" in
@@ -129,6 +131,7 @@ Environment:
   SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS Max seconds without session/log output. Default: 300.
   SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS Watchdog poll interval. Default: 10.
   SELF_HARNESS_AUTO_CHALLENGE     Set to 0 to skip automatic progressive challenges on idle agent branches.
+  SELF_HARNESS_TRIGGER_REVIEW_LIMIT Max trigger records inspected for trigger-review idle challenges. Default: 8.
   SELF_HARNESS_CODEX_ARGS             Extra args passed to codex exec/resume.
   SELF_HARNESS_SKIP_COMMIT            Set to 1 to skip post-run commits.
   SELF_HARNESS_NOTIFY_CHAT_ID         Optional lark-cli chat recipient for supervisor status.
@@ -381,6 +384,131 @@ has_recent_low_value_feedback() {
   [ "$(recent_low_value_subjects | wc -l | tr -d '[:space:]')" -ge 2 ]
 }
 
+trigger_review_limit_is_valid() {
+  case "$TRIGGER_REVIEW_LIMIT" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+    *)
+      [ "$TRIGGER_REVIEW_LIMIT" -gt 0 ]
+      ;;
+  esac
+}
+
+trigger_review_evidence_records() {
+  "${ROOT_DIR}/scripts/supervisor-evaluation-trigger-list.sh" \
+    --status review \
+    --limit "$TRIGGER_REVIEW_LIMIT"
+}
+
+trigger_review_evidence_sources() {
+  trigger_review_evidence_records \
+    | awk '
+      /^[[:space:]]*-[[:space:]]source:[[:space:]]*/ {
+        value = $0
+        sub(/^[[:space:]]*-[[:space:]]source:[[:space:]]*/, "", value)
+        print value
+      }
+    '
+}
+
+has_existing_trigger_review_challenge_for_source() {
+  local source_rel="$1"
+  local file
+  [ -n "$source_rel" ] || return 1
+
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    LC_ALL=C rg -q --fixed-strings "trigger-review-source: ${source_rel}" "$file" && return 0
+  done < <(find \
+    "${ROOT_DIR}/mailbox/inbox" \
+    "${ROOT_DIR}/mailbox/processing" \
+    "${ROOT_DIR}/mailbox/done" \
+    "${ROOT_DIR}/mailbox/failed" \
+    "${ROOT_DIR}/mailbox/outbox" \
+    -maxdepth 1 -type f -name '*.md' 2>/dev/null)
+
+  return 1
+}
+
+write_trigger_review_challenge() {
+  local id="$1"
+  local branch="$2"
+  local date_value="$3"
+  local source_rel="$4"
+  local file="${ROOT_DIR}/mailbox/inbox/${id}.md"
+
+  cat >"$file" <<EOF
+---
+title: "Trigger Review Pressure Challenge"
+id: "mailbox-inbox-${id}"
+type: "mailbox-inbox"
+status: "pending"
+owner: "supervisor"
+created: "${date_value}"
+updated: "${date_value}"
+from: "supervisor"
+to: "${branch}"
+message_id: "${id}"
+tags:
+  - supervisor
+  - feedback-pressure
+  - trigger-review
+  - self-improvement
+summary: "Asks the branch agent to evaluate concrete trigger-review evidence before the idle loop can stop."
+related:
+  - "${source_rel}"
+trigger-review-source: "${source_rel}"
+---
+
+# Trigger Review Pressure Challenge
+
+The supervisor generated this because there was no pending inbox and \`scripts/supervisor.sh triggers --status review --limit ${TRIGGER_REVIEW_LIMIT}\` reported later durable evidence for a trigger-backed refusal. A clean mailbox is not enough to stop while a concrete review trigger has fired.
+
+trigger-review-source: ${source_rel}
+
+## Task
+
+Use the trigger-review evidence to raise the proof bar without creating generic churn.
+
+1. Review \`${source_rel}\` and run \`scripts/supervisor.sh triggers --status review --limit ${TRIGGER_REVIEW_LIMIT}\` before choosing a response.
+2. Identify the exact concrete trigger evidence and decide whether it is already satisfied, stale, or still needs one focused mechanism.
+3. Produce exactly one focused mechanism or a bounded refusal with rerunnable evidence.
+4. Do not make a no-pending mailbox report or generic repository sweep the primary result.
+5. Keep durable paths repository-relative, do not modify \`constitution/\`, and run \`scripts/docs-check.sh\` before finishing.
+EOF
+}
+
+seed_trigger_review_challenge_if_needed() {
+  [ "$AUTO_CHALLENGE" = "1" ] || return 0
+  is_agent_branch || return 0
+  has_pending_inbox && return 0
+
+  if ! trigger_review_limit_is_valid; then
+    log "trigger review challenge skipped: invalid SELF_HARNESS_TRIGGER_REVIEW_LIMIT=${TRIGGER_REVIEW_LIMIT}"
+    return 0
+  fi
+
+  local source_rel found_source=0
+  while IFS= read -r source_rel; do
+    [ -n "$source_rel" ] || continue
+    found_source=1
+    has_existing_trigger_review_challenge_for_source "$source_rel" && continue
+
+    local branch id date_value
+    branch="$(current_branch)"
+    id="$(date -u +"%Y-%m-%d-%H%M%S-trigger-review-pressure-challenge")"
+    date_value="$(date -u +"%Y-%m-%d")"
+    write_trigger_review_challenge "$id" "$branch" "$date_value" "$source_rel"
+    log "seeded trigger review challenge: mailbox/inbox/${id}.md from ${source_rel}"
+    return 0
+  done < <(trigger_review_evidence_sources)
+
+  if [ "$found_source" -eq 1 ]; then
+    log "trigger review challenge skipped: all review-evidence sources already challenged"
+  fi
+}
+
 write_progressive_challenge() {
   local id="$1"
   local branch="$2"
@@ -444,9 +572,12 @@ seed_progressive_challenge_if_needed() {
   has_pending_inbox && return 0
 
   if [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=all)" ]; then
-    log "progressive challenge skipped: worktree has existing changes"
+    log "idle challenge skipped: worktree has existing changes"
     return 0
   fi
+
+  seed_trigger_review_challenge_if_needed
+  has_pending_inbox && return 0
 
   if ! has_recent_low_value_feedback; then
     log "progressive challenge skipped: no repeated low-value branch feedback"
