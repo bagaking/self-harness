@@ -911,49 +911,7 @@ is_portability_checked_path() {
 }
 
 check_portable_content() {
-  local errors=0
-  local file rel slash users_dir home_dir private_dir tmp_dir var_dir folders_dir quote_chars local_path_pattern temp_path_pattern env_pattern home_rel_pattern
-  slash="/"
-  users_dir="Users"
-  home_dir="home"
-  private_dir="private"
-  tmp_dir="tmp"
-  var_dir="var"
-  folders_dir="folders"
-  quote_chars=$'`\'"'
-  local_path_pattern="(^|[^[:alnum:]_.-])(${slash}${users_dir}|${slash}${home_dir})${slash}[^[:space:]${quote_chars}]+"
-  temp_path_pattern="(^|[^[:alnum:]_.-])(${slash}${private_dir}${slash}${tmp_dir}|${slash}${var_dir}${slash}${folders_dir})${slash}[^[:space:]${quote_chars}]+"
-  env_pattern="(^|[^[:alnum:]_])(HOSTNAME|USER|USERNAME|LOGNAME|HOME)=[^[:space:]${quote_chars}]+"
-  home_rel_pattern="~${slash}(Desktop|Documents|Downloads|Library|Movies|Music|Pictures|proj|Projects|workspace|work)${slash}[^[:space:]${quote_chars}]*"
-
-  while IFS= read -r rel; do
-    [ -n "$rel" ] || continue
-    file="${ROOT_DIR}/${rel}"
-    [ -f "$file" ] || continue
-    is_portability_checked_path "$rel" || continue
-
-    if LC_ALL=C rg -n --color never "$local_path_pattern" "$file"; then
-      errors=$((errors + 1))
-    fi
-
-    if LC_ALL=C rg -n --color never "$temp_path_pattern" "$file"; then
-      errors=$((errors + 1))
-    fi
-
-    if LC_ALL=C rg -n --color never "$env_pattern" "$file"; then
-      errors=$((errors + 1))
-    fi
-
-    if LC_ALL=C rg -n --color never "$home_rel_pattern" "$file"; then
-      errors=$((errors + 1))
-    fi
-
-  done < <(staged_or_changed_files)
-
-  if [ "$errors" -gt 0 ]; then
-    echo "commit gate failed: portable content check found local paths, device details, or outside-repo write instructions" >&2
-    return 1
-  fi
+  "${ROOT_DIR}/scripts/portable-content-check.sh"
 }
 
 constitution_changes_present() {
@@ -1205,6 +1163,7 @@ EOF
 
 sanitize_recovery_evidence() {
   local slash users_dir home_dir private_dir tmp_dir var_dir folders_dir
+  local local_placeholder temp_placeholder home_placeholder
   slash="/"
   users_dir="Users"
   home_dir="home"
@@ -1212,11 +1171,14 @@ sanitize_recovery_evidence() {
   tmp_dir="tmp"
   var_dir="var"
   folders_dir="folders"
+  local_placeholder="(local path redacted)"
+  temp_placeholder="(project-outside temp path redacted)"
+  home_placeholder="(home-relative path redacted)"
   sed -E \
-    -e "s#(${slash}${users_dir}|${slash}${home_dir})${slash}[^[:space:]]+#[redacted-local-path]#g" \
-    -e "s#(${slash}${private_dir}${slash}${tmp_dir}|${slash}${private_dir}${slash}${var_dir}${slash}${folders_dir}|${slash}${var_dir}${slash}${folders_dir}|${slash}${tmp_dir})${slash}[^[:space:]]+#[redacted-temp-path]#g" \
+    -e "s#(${slash}${users_dir}|${slash}${home_dir})${slash}[^[:space:]]+#${local_placeholder}#g" \
+    -e "s#(${slash}${private_dir}${slash}${tmp_dir}|${slash}${private_dir}${slash}${var_dir}${slash}${folders_dir}|${slash}${var_dir}${slash}${folders_dir}|${slash}${tmp_dir})${slash}[^[:space:]]+#${temp_placeholder}#g" \
     -e 's#(HOSTNAME|USER|USERNAME|LOGNAME|HOME)=[^[:space:]]+#\1=[redacted]#g' \
-    -e "s#~${slash}(Desktop|Documents|Downloads|Library|Movies|Music|Pictures|proj|Projects|workspace|work)${slash}[^[:space:]]*#[redacted-home-path]#g"
+    -e "s#~${slash}(Desktop|Documents|Downloads|Library|Movies|Music|Pictures|proj|Projects|workspace|work)${slash}[^[:space:]]*#${home_placeholder}#g"
 }
 
 bounded_discarded_supervisor_diff_section() {
