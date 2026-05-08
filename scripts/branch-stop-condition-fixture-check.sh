@@ -176,10 +176,13 @@ tags:
   - mailbox
 related:
   - "mailbox/outbox/2026-05-08-resolved-next.md"
+next-pressure-source: "mailbox/outbox/2026-05-08-resolved-next.md"
 summary: "Fixture lifecycle marker for next-pressure debt."
 ---
 
 # Resolved Next Marker
+
+next-pressure-source: mailbox/outbox/2026-05-08-resolved-next.md
 
 mailbox/outbox/2026-05-08-resolved-next.md
 DONE
@@ -266,6 +269,79 @@ OUTBOX
   log "fails unresolved next-pressure debt"
 }
 
+check_fails_incidental_lifecycle_reference() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/incidental-reference"
+  log_file="${WORK_DIR}/incidental-reference.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-incidental-reference-source.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-incidental-reference-source"
+title: "Incidental Reference Source"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/branch-stop-condition-fixture"
+to: "supervisor"
+message_id: "incidental-reference-source"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture next-pressure source without a real source marker."
+related: []
+---
+
+# Incidental Reference Source
+
+Return-to-main judgment: defer. This fixture is not a main candidate.
+
+Next supervisor pressure: this requirement is only mentioned by an unrelated done file.
+OUTBOX
+
+  cat >"${sandbox}/mailbox/done/2026-05-08-unrelated-done.md" <<'DONE'
+---
+id: "mailbox-done-unrelated-done"
+title: "Unrelated Done"
+type: "mailbox-inbox"
+status: "done"
+owner: "supervisor"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "supervisor"
+to: "agent/branch-stop-condition-fixture"
+message_id: "unrelated-done"
+tags:
+  - mailbox
+related:
+  - "mailbox/outbox/2026-05-08-incidental-reference-source.md"
+summary: "Fixture unrelated done record that only mentions the source path."
+---
+
+# Unrelated Done
+
+This completed mailbox file mentions mailbox/outbox/2026-05-08-incidental-reference-source.md,
+but it does not carry next-pressure-source or a pressure-specific source marker.
+DONE
+  commit_all "$sandbox" "run: Incidental Reference Source"
+
+  if (
+    cd "$sandbox"
+    scripts/branch-stop-condition-check.sh --run-limit 5 --trigger-limit 8 --evidence-limit 3
+  ) >"$log_file" 2>&1; then
+    sed -n '1,180p' "$log_file" >&2
+    fail "incidental lifecycle reference fixture should fail"
+  fi
+  rg -q 'expected next-pressure-source or pressure-specific source marker' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "incidental lifecycle reference failure did not name explicit marker requirement"
+  }
+
+  log "fails incidental lifecycle path references"
+}
+
 check_fails_unchallenged_review_trigger() {
   local sandbox log_file
   sandbox="${WORK_DIR}/unchallenged-trigger"
@@ -347,6 +423,7 @@ main() {
 
   check_passes_clean_stop
   check_fails_unresolved_next_pressure
+  check_fails_incidental_lifecycle_reference
   check_fails_unchallenged_review_trigger
   check_fails_main_readiness_claim
 

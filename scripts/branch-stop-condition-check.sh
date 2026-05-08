@@ -15,9 +15,10 @@ Usage:
 
 Checks whether the branch has enough recent feedback evidence for the supervisor
 to stop instead of raising another pressure item. The stop condition is strict:
-recent run-linked feedback must have no unresolved next-pressure debt, review
-triggers must already have lifecycle markers, and recent outbox reports must not
-claim main readiness.
+recent run-linked feedback must have no unresolved next-pressure debt, next
+pressure sources must have explicit source markers instead of incidental path
+mentions, review triggers must already have lifecycle markers, and recent
+outbox reports must not claim main readiness.
 EOF
 }
 
@@ -75,15 +76,6 @@ document_matches() {
   LC_ALL=C rg -qi -- "$pattern" "${ROOT_DIR}/${rel}"
 }
 
-mailbox_lifecycle_files() {
-  find \
-    "${ROOT_DIR}/mailbox/inbox" \
-    "${ROOT_DIR}/mailbox/processing" \
-    "${ROOT_DIR}/mailbox/done" \
-    "${ROOT_DIR}/mailbox/failed" \
-    -maxdepth 1 -type f -name '*.md' 2>/dev/null
-}
-
 mailbox_marker_files() {
   find \
     "${ROOT_DIR}/mailbox/inbox" \
@@ -94,31 +86,35 @@ mailbox_marker_files() {
     -maxdepth 1 -type f -name '*.md' 2>/dev/null
 }
 
-has_mailbox_lifecycle_reference() {
-  local source_rel="$1"
+has_named_source_marker_for_source() {
+  local marker="$1"
+  local source_rel="$2"
   local file
 
   while IFS= read -r file; do
     [ -n "$file" ] || continue
-    LC_ALL=C rg -q --fixed-strings "$source_rel" "$file" && return 0
-  done < <(mailbox_lifecycle_files)
+    if LC_ALL=C rg -q --fixed-strings "${marker}: \"${source_rel}\"" "$file" ||
+       LC_ALL=C rg -q --fixed-strings "${marker}: ${source_rel}" "$file"; then
+      return 0
+    fi
+  done < <(mailbox_marker_files)
+
+  return 1
+}
+
+has_next_pressure_marker_for_source() {
+  local source_rel="$1"
+
+  has_named_source_marker_for_source "next-pressure-source" "$source_rel" && return 0
+  has_named_source_marker_for_source "continuous-pressure-source" "$source_rel" && return 0
 
   return 1
 }
 
 has_trigger_review_marker_for_source() {
   local source_rel="$1"
-  local file
 
-  while IFS= read -r file; do
-    [ -n "$file" ] || continue
-    if LC_ALL=C rg -q --fixed-strings "trigger-review-source: \"${source_rel}\"" "$file" ||
-       LC_ALL=C rg -q --fixed-strings "trigger-review-source: ${source_rel}" "$file"; then
-      return 0
-    fi
-  done < <(mailbox_marker_files)
-
-  return 1
+  has_named_source_marker_for_source "trigger-review-source" "$source_rel"
 }
 
 extract_marker_value() {
@@ -197,9 +193,10 @@ check_recent_outbox_stop_debt() {
     [ -f "${ROOT_DIR}/${rel}" ] || continue
 
     if document_matches "$rel" '^Next supervisor pressure:[[:space:]]*.'; then
-      if ! has_mailbox_lifecycle_reference "$rel"; then
+      if ! has_next_pressure_marker_for_source "$rel"; then
         requirement="$(extract_marker_value "Next supervisor pressure:" "$rel")"
         echo "branch-stop-condition-check: unresolved proof debt in ${rel}" >&2
+        echo "branch-stop-condition-check: expected next-pressure-source or pressure-specific source marker" >&2
         echo "branch-stop-condition-check: requirement: ${requirement}" >&2
         errors=$((errors + 1))
       fi
