@@ -15,10 +15,13 @@ summary: "Defines the executable branch-local stop condition for recent run-link
 related:
   - "mailbox-inbox-2026-05-08-043405-stop-condition-evaluation-challenge"
   - "mailbox-inbox-2026-05-08-045418-stop-condition-lifecycle-proof-challenge"
+  - "mailbox-inbox-2026-05-08-051115-feedback-pressure-challenge"
   - "scripts/branch-stop-condition-check.sh"
   - "scripts/branch-stop-condition-fixture-check.sh"
+  - "scripts/idle-stop-proof-fixture-check.sh"
+  - "scripts/supervisor.sh"
   - "skills/branch-evolution-evaluation/SKILL.md"
-source: "mailbox/done/2026-05-08-045418-stop-condition-lifecycle-proof-challenge.md"
+source: "mailbox/done/2026-05-08-051115-feedback-pressure-challenge.md"
 confidence: "high"
 ---
 
@@ -43,3 +46,11 @@ scripts/branch-stop-condition-fixture-check.sh
 It proves one pass case and four failure cases: marker-covered pressure may stop, unresolved next-pressure debt fails, incidental lifecycle path references fail, unchallenged review evidence fails, and branch-local main-readiness claims fail.
 
 Current decision: the sampled branch pressure line is stop-safe only after the check passes. Passing this check is not a return-to-main signal; branch-local pressure machinery remains deferred unless the supervisor collects repeated non-noisy evidence across real cycles.
+
+The supervisor idle skip path must run this stop proof immediately before skipping an agent launch when no pending inbox remains after challenge seeding. A passing proof may produce an idle skip log. A failing proof must seed an `Idle Stop Proof Failure Challenge` under `mailbox/inbox/` instead of silently stopping. The focused supervisor fixture is:
+
+```text
+scripts/idle-stop-proof-fixture-check.sh
+```
+
+It proves that a clean idle branch records stop proof before skip, and that a failed stop proof seeds a defect-specific inbox with a `stop-proof-log:` pointer under `.self-harness/tmp/`.

@@ -33,6 +33,8 @@ DEFAULT_CODEX_WATCHDOG_POLL_SECONDS=10
 DEFAULT_AUTO_CHALLENGE=1
 DEFAULT_TRIGGER_REVIEW_LIMIT=8
 DEFAULT_CONTINUOUS_PRESSURE_LIMIT=3
+DEFAULT_STOP_PROOF_RUN_LIMIT=5
+DEFAULT_STOP_PROOF_EVIDENCE_LIMIT=3
 NEXT_PRESSURE_MARKER_PATTERN='^Next supervisor pressure:[[:space:]]*.'
 STATUS_NOTIFY_DEDUP_FILE="${RUN_DIR}/supervisor-notify-last-key"
 
@@ -51,6 +53,9 @@ CODEX_WATCHDOG_POLL_SECONDS="${SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS:-$DEFAUL
 AUTO_CHALLENGE="${SELF_HARNESS_AUTO_CHALLENGE:-$DEFAULT_AUTO_CHALLENGE}"
 TRIGGER_REVIEW_LIMIT="${SELF_HARNESS_TRIGGER_REVIEW_LIMIT:-$DEFAULT_TRIGGER_REVIEW_LIMIT}"
 CONTINUOUS_PRESSURE_LIMIT="${SELF_HARNESS_CONTINUOUS_PRESSURE_LIMIT:-$DEFAULT_CONTINUOUS_PRESSURE_LIMIT}"
+STOP_PROOF_RUN_LIMIT="${SELF_HARNESS_STOP_PROOF_RUN_LIMIT:-$DEFAULT_STOP_PROOF_RUN_LIMIT}"
+STOP_PROOF_TRIGGER_LIMIT="${SELF_HARNESS_STOP_PROOF_TRIGGER_LIMIT:-$TRIGGER_REVIEW_LIMIT}"
+STOP_PROOF_EVIDENCE_LIMIT="${SELF_HARNESS_STOP_PROOF_EVIDENCE_LIMIT:-$DEFAULT_STOP_PROOF_EVIDENCE_LIMIT}"
 
 command_needs_stable_supervisor() {
   case "${1:-}" in
@@ -135,6 +140,9 @@ Environment:
   SELF_HARNESS_AUTO_CHALLENGE     Set to 0 to skip automatic progressive challenges on idle agent branches.
   SELF_HARNESS_TRIGGER_REVIEW_LIMIT Max trigger records inspected for trigger-review idle challenges. Default: 8.
   SELF_HARNESS_CONTINUOUS_PRESSURE_LIMIT Recent commits inspected for deferred proof-debt idle challenges. Default: 3.
+  SELF_HARNESS_STOP_PROOF_RUN_LIMIT Recent run commits inspected before idle skip. Default: 5.
+  SELF_HARNESS_STOP_PROOF_TRIGGER_LIMIT Trigger records inspected before idle skip. Default: SELF_HARNESS_TRIGGER_REVIEW_LIMIT.
+  SELF_HARNESS_STOP_PROOF_EVIDENCE_LIMIT Evidence records inspected before idle skip. Default: 3.
   SELF_HARNESS_CODEX_ARGS             Extra args passed to codex exec/resume.
   SELF_HARNESS_SKIP_COMMIT            Set to 1 to skip post-run commits.
   SELF_HARNESS_NOTIFY_CHAT_ID         Optional lark-cli chat recipient for supervisor status.
@@ -405,6 +413,17 @@ continuous_pressure_limit_is_valid() {
       ;;
     *)
       [ "$CONTINUOUS_PRESSURE_LIMIT" -gt 0 ]
+      ;;
+  esac
+}
+
+positive_integer_value() {
+  case "$1" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+    *)
+      [ "$1" -gt 0 ]
       ;;
   esac
 }
@@ -742,6 +761,108 @@ seed_progressive_challenge_if_needed() {
   date_value="$(date -u +"%Y-%m-%d")"
   write_progressive_challenge "$id" "$branch" "$date_value"
   log "seeded progressive challenge: mailbox/inbox/${id}.md"
+}
+
+write_stop_proof_failure_challenge() {
+  local id="$1"
+  local branch="$2"
+  local date_value="$3"
+  local proof_log_rel="$4"
+  local file="${ROOT_DIR}/mailbox/inbox/${id}.md"
+
+  cat >"$file" <<EOF
+---
+title: "Idle Stop Proof Failure Challenge"
+id: "mailbox-inbox-${id}"
+type: "mailbox-inbox"
+status: "pending"
+owner: "supervisor"
+created: "${date_value}"
+updated: "${date_value}"
+from: "supervisor"
+to: "${branch}"
+message_id: "${id}"
+tags:
+  - supervisor
+  - feedback-pressure
+  - stop-condition
+  - idle-stop-proof
+  - self-improvement
+summary: "Blocks idle skip because the branch stop-condition proof failed before launch."
+related:
+  - "${proof_log_rel}"
+stop-proof-log: "${proof_log_rel}"
+---
+
+# Idle Stop Proof Failure Challenge
+
+The supervisor generated this because no pending inbox remained after challenge seeding, but the pre-skip stop proof failed. The idle loop must not silently stop when \`scripts/branch-stop-condition-check.sh\` reports unresolved pressure.
+
+stop-proof-log: ${proof_log_rel}
+
+## Task
+
+Use the failed stop proof to raise the bar without creating generic churn.
+
+1. Review \`${proof_log_rel}\`, \`scripts/supervisor.sh\`, and \`scripts/branch-stop-condition-check.sh\` before broad repository inspection.
+2. Identify the exact unresolved proof debt or unsafe stop signal named by the log.
+3. Produce exactly one focused fix, proof artifact, or bounded refusal with a rerunnable stop trigger.
+4. Do not replace this with a no-pending mailbox report or generic repository sweep.
+5. Keep durable paths repository-relative, do not modify \`constitution/\`, and run \`scripts/docs-check.sh\` before finishing.
+EOF
+}
+
+seed_stop_proof_failure_challenge() {
+  local proof_log_rel="$1"
+  [ "$AUTO_CHALLENGE" = "1" ] || return 0
+  is_agent_branch || return 0
+  has_pending_inbox && return 0
+
+  local branch id date_value
+  branch="$(current_branch)"
+  id="$(date -u +"%Y-%m-%d-%H%M%S-idle-stop-proof-failure")"
+  date_value="$(date -u +"%Y-%m-%d")"
+  write_stop_proof_failure_challenge "$id" "$branch" "$date_value" "$proof_log_rel"
+  log "seeded idle stop proof failure challenge: mailbox/inbox/${id}.md from ${proof_log_rel}"
+}
+
+prove_idle_stop_condition_or_seed_challenge() {
+  is_agent_branch || return 0
+  has_pending_inbox && return 0
+
+  if ! positive_integer_value "$STOP_PROOF_RUN_LIMIT"; then
+    log "idle stop proof skipped: invalid SELF_HARNESS_STOP_PROOF_RUN_LIMIT=${STOP_PROOF_RUN_LIMIT}"
+    return 0
+  fi
+  if ! positive_integer_value "$STOP_PROOF_TRIGGER_LIMIT"; then
+    log "idle stop proof skipped: invalid SELF_HARNESS_STOP_PROOF_TRIGGER_LIMIT=${STOP_PROOF_TRIGGER_LIMIT}"
+    return 0
+  fi
+  if ! positive_integer_value "$STOP_PROOF_EVIDENCE_LIMIT"; then
+    log "idle stop proof skipped: invalid SELF_HARNESS_STOP_PROOF_EVIDENCE_LIMIT=${STOP_PROOF_EVIDENCE_LIMIT}"
+    return 0
+  fi
+
+  local proof_log proof_log_rel status=0
+  proof_log="${TMP_DIR}/idle-stop-proof-$(date -u +%Y%m%dT%H%M%SZ).log"
+  proof_log_rel="$(repo_relative_path "$proof_log")"
+  set +e
+  "${ROOT_DIR}/scripts/branch-stop-condition-check.sh" \
+    --run-limit "$STOP_PROOF_RUN_LIMIT" \
+    --trigger-limit "$STOP_PROOF_TRIGGER_LIMIT" \
+    --evidence-limit "$STOP_PROOF_EVIDENCE_LIMIT" \
+    >"$proof_log" 2>&1
+  status=$?
+  set -e
+
+  if [ "$status" -eq 0 ]; then
+    log "idle stop proof ok: ${proof_log_rel}"
+    return 0
+  fi
+
+  log "idle stop proof failed: ${proof_log_rel}"
+  seed_stop_proof_failure_challenge "$proof_log_rel"
+  return 1
 }
 
 read_feedback_command_input() {
@@ -1165,6 +1286,18 @@ write_default_commit_message_file() {
 
 has_git_changes() {
   [ -n "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=all)" ]
+}
+
+repo_relative_path() {
+  local path="$1"
+  case "$path" in
+    "${ROOT_DIR}/"*)
+      printf '%s\n' "${path#${ROOT_DIR}/}"
+      ;;
+    *)
+      printf '%s\n' "$path"
+      ;;
+  esac
 }
 
 staged_or_changed_files() {
@@ -1671,18 +1804,6 @@ latest_activity_epoch() {
   fi
 }
 
-repo_relative_path() {
-  local path="$1"
-  case "$path" in
-    "${ROOT_DIR}/"*)
-      printf '%s\n' "${path#${ROOT_DIR}/}"
-      ;;
-    *)
-      printf '%s\n' "$path"
-      ;;
-  esac
-}
-
 write_run_failure_incident() {
   local status="$1"
   local mode="$2"
@@ -1860,8 +1981,16 @@ run_codex_once() {
   seed_progressive_challenge_if_needed
 
   if should_skip_idle_agent_launch; then
-    log "idle agent run skipped: no pending inbox after challenge seeding"
-    return 0
+    if ! prove_idle_stop_condition_or_seed_challenge; then
+      if has_pending_inbox; then
+        log "idle agent launch required: stop proof failure challenge pending"
+      else
+        log "idle agent launch required: stop proof failed"
+      fi
+    else
+      log "idle agent run skipped: stop proof ok and no pending inbox after challenge seeding"
+      return 0
+    fi
   fi
 
   acquire_lock || return 0
