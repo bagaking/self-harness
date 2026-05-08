@@ -18,7 +18,7 @@ prepare_sandbox() {
   local sandbox="$1"
 
   rm -rf "$sandbox"
-  mkdir -p "${sandbox}/scripts" "${sandbox}/sessions"
+  mkdir -p "${sandbox}/scripts" "${sandbox}/sessions" "${sandbox}/memory/incidents"
 
   cp "${ROOT_DIR}/scripts/pending-inbox-claim-latency-check.sh" "${sandbox}/scripts/"
   cp "${ROOT_DIR}/scripts/pending-inbox-claim-latency-gate-check.sh" "${sandbox}/scripts/"
@@ -330,6 +330,105 @@ check_gate_rejects_changed_delayed_session() {
   log "gate rejects changed delayed pending inbox transcript"
 }
 
+check_gate_allows_incident_covered_delayed_session() {
+  local sandbox log_file session incident
+  sandbox="${WORK_DIR}/gate-incident-covered"
+  log_file="${WORK_DIR}/gate-incident-covered.log"
+  session="${sandbox}/sessions/delayed.jsonl"
+  incident="${sandbox}/memory/incidents/2026-05-07-delayed-claim.md"
+  prepare_gate_sandbox "$sandbox"
+  write_delayed_claim_session "$session"
+
+  cat >"$incident" <<'INCIDENT'
+---
+id: "incident-2026-05-07-delayed-claim"
+title: "Delayed Claim Fixture"
+type: "incident"
+status: "active"
+owner: "agent"
+created: "2026-05-07"
+updated: "2026-05-07"
+tags:
+  - incident
+  - claim-latency
+summary: "Fixture incident for a failed pending-inbox claim-latency transcript."
+source: "session"
+confidence: "high"
+related:
+  - "sessions/delayed.jsonl"
+---
+
+# Delayed Claim Fixture
+
+```text
+pending-inbox-claim-latency-check: FAIL sessions/delayed.jsonl
+claim: 2026-05-07T00:03:30.000Z mv mailbox/inbox/pending-task.md mailbox/processing/pending-task.md
+claim_delay_seconds: 210
+max_seconds: 120
+broad pre-claim commands:
+- 2026-05-07T00:01:20.000Z scripts/query-docs.sh constitution mailbox
+```
+INCIDENT
+
+  run_gate "$sandbox" "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "gate should allow a delayed session only when a changed incident records the exact failure"
+  }
+  rg -q 'incident-covered failure sessions/delayed.jsonl covered_by=memory/incidents/2026-05-07-delayed-claim.md' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "gate incident-covered pass did not name the covering incident"
+  }
+
+  log "gate allows changed failed transcript with exact changed incident"
+}
+
+check_gate_rejects_unrelated_incident_for_delayed_session() {
+  local sandbox log_file session incident status
+  sandbox="${WORK_DIR}/gate-unrelated-incident"
+  log_file="${WORK_DIR}/gate-unrelated-incident.log"
+  session="${sandbox}/sessions/delayed.jsonl"
+  incident="${sandbox}/memory/incidents/2026-05-07-unrelated.md"
+  prepare_gate_sandbox "$sandbox"
+  write_delayed_claim_session "$session"
+
+  cat >"$incident" <<'INCIDENT'
+---
+id: "incident-2026-05-07-unrelated"
+title: "Unrelated Incident"
+type: "incident"
+status: "active"
+owner: "agent"
+created: "2026-05-07"
+updated: "2026-05-07"
+tags:
+  - incident
+summary: "Fixture incident that does not cover the failed transcript."
+source: "session"
+confidence: "high"
+---
+
+# Unrelated Incident
+
+This does not name the failed claim-latency transcript.
+INCIDENT
+
+  if run_gate "$sandbox" "$log_file"; then
+    status=0
+  else
+    status=$?
+  fi
+  [ "$status" -eq 1 ] || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "gate unrelated incident returned ${status}, expected 1"
+  }
+  rg -q 'pending-inbox-claim-latency-check: FAIL sessions/delayed.jsonl' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "gate unrelated incident did not preserve scanner failure"
+  }
+
+  log "gate rejects failed transcript with unrelated incident"
+}
+
 check_gate_allows_changed_claim_first_session() {
   local sandbox log_file session
   sandbox="${WORK_DIR}/gate-claim-first"
@@ -359,6 +458,8 @@ main() {
   check_rejects_slow_required_boot_under_strict_cap
   check_skips_no_pending_prompt
   check_gate_rejects_changed_delayed_session
+  check_gate_allows_incident_covered_delayed_session
+  check_gate_rejects_unrelated_incident_for_delayed_session
   check_gate_allows_changed_claim_first_session
   log "ok"
 }

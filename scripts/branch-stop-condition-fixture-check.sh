@@ -417,6 +417,123 @@ OUTBOX
   log "fails branch-local main-readiness claims"
 }
 
+check_passes_reviewed_main_readiness_claim() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/reviewed-main-readiness"
+  log_file="${WORK_DIR}/reviewed-main-readiness.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-reviewed-main-readiness.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-reviewed-main-readiness"
+title: "Reviewed Main Readiness"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/branch-stop-condition-fixture"
+to: "supervisor"
+message_id: "reviewed-main-readiness"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture reviewed main-readiness candidate."
+related: []
+---
+
+# Reviewed Main Readiness
+
+Return-to-main judgment: candidate for the branch-local pressure mechanism.
+OUTBOX
+
+  cat >"${sandbox}/mailbox/done/2026-05-08-main-readiness-marker.md" <<'DONE'
+---
+id: "mailbox-done-main-readiness-marker"
+title: "Main Readiness Marker"
+type: "mailbox-inbox"
+status: "done"
+owner: "supervisor"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "supervisor"
+to: "agent/branch-stop-condition-fixture"
+message_id: "main-readiness-marker"
+tags:
+  - mailbox
+related:
+  - "mailbox/outbox/2026-05-08-reviewed-main-readiness.md"
+main-readiness-source: "mailbox/outbox/2026-05-08-reviewed-main-readiness.md"
+summary: "Fixture lifecycle marker for a reviewed main-readiness claim."
+---
+
+# Main Readiness Marker
+
+main-readiness-source: mailbox/outbox/2026-05-08-reviewed-main-readiness.md
+DONE
+  commit_all "$sandbox" "run: Reviewed Main Readiness"
+
+  (
+    cd "$sandbox"
+    scripts/branch-stop-condition-check.sh --run-limit 5 --trigger-limit 8 --evidence-limit 3
+  ) >"$log_file" 2>&1 || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "reviewed main-readiness fixture should pass"
+  }
+  rg -q '^branch-stop-condition-check: ok$' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "reviewed main-readiness fixture did not report ok"
+  }
+
+  log "passes reviewed main-readiness claims with lifecycle marker"
+}
+
+check_passes_negative_main_readiness_with_later_positive_words() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/negative-main-readiness"
+  log_file="${WORK_DIR}/negative-main-readiness.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-negative-main-readiness.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-negative-main-readiness"
+title: "Negative Main Readiness"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/branch-stop-condition-fixture"
+to: "supervisor"
+message_id: "negative-main-readiness"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture negative return-to-main line with later positive words."
+related: []
+---
+
+# Negative Main Readiness
+
+Return-to-main judgment: no; this branch-local fixture does not promote a reusable mechanism.
+OUTBOX
+  commit_all "$sandbox" "run: Negative Main Readiness"
+
+  (
+    cd "$sandbox"
+    scripts/branch-stop-condition-check.sh --run-limit 5 --trigger-limit 8 --evidence-limit 3
+  ) >"$log_file" 2>&1 || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "negative main-readiness fixture should pass"
+  }
+  rg -q '^branch-stop-condition-check: ok$' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "negative main-readiness fixture did not report ok"
+  }
+
+  log "passes negative main-readiness lines with later positive words"
+}
+
 main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
@@ -426,6 +543,8 @@ main() {
   check_fails_incidental_lifecycle_reference
   check_fails_unchallenged_review_trigger
   check_fails_main_readiness_claim
+  check_passes_reviewed_main_readiness_claim
+  check_passes_negative_main_readiness_with_later_positive_words
 
   log "ok"
 }

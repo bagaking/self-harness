@@ -5,7 +5,7 @@ type: "memory"
 status: "active"
 owner: "agent"
 created: "2026-05-07"
-updated: "2026-05-08"
+updated: "2026-05-09"
 tags:
   - decision
   - supervisor
@@ -38,6 +38,8 @@ Pending-inbox launches on this branch need a checkable claim-order signal. A ses
 
 `scripts/pending-inbox-claim-latency-gate-check.sh` is now part of the supervisor commit gate. It scans every changed `sessions/*.jsonl` transcript in the commit candidate, not only the latest transcript, so a later repair session cannot hide an earlier unverifiable pending-inbox lifecycle claim.
 
+As of the 2026-05-09 gate repair, a changed failed pending-inbox transcript may be committed only when the same commit also changes a `memory/incidents/*.md` record that names the exact failed session and preserves the checker failure details. This is an audit exception, not a pass. The standalone scanner must still fail that transcript, and the gate must reject the same transcript when the incident is missing or unrelated.
+
 ## Evidence
 
 `scripts/pending-inbox-claim-latency-fixture-check.sh` proves three paths:
@@ -61,6 +63,8 @@ The 2026-05-07-225840 gate-promotion challenge added bounded false-positive evid
 The 2026-05-07-150717 post-run pressure challenge supplied that next sample extension. `scripts/supervisor.sh claim-latency` passed the prior four-transcript sample plus two known-good pending-inbox transcripts not produced by the claim-latency challenge sequence: `sessions/2026/05/07/rollout-2026-05-07T20-21-11-019e0262-856a-7ec2-96af-2c0631194154.jsonl` from `mailbox/inbox/2026-05-07-122028-post-run-pressure-challenge.md` with `claim_delay_seconds=39`, and `sessions/2026/05/07/rollout-2026-05-07T20-29-09-019e0269-d178-7c12-b74c-2b80bff27ce3.jsonl` from `mailbox/inbox/2026-05-07-122904-feedback-pressure-challenge.md` with `claim_delay_seconds=32`. The required six-transcript sample had no failures to classify.
 
 The 2026-05-08 commit-gate repair calibrated the default threshold after a pending-inbox session claimed correctly, with no broad pre-claim discovery, but reached the first claim at 93 seconds after the required `AGENTS.md` and `constitution/00-charter.md` reads. The gate should keep rejecting broad pre-claim discovery and genuinely long delays, but the default wall-clock cap should allow this required-boot-read shape. `scripts/pending-inbox-claim-latency-fixture-check.sh` now proves a 93-second required-boot session passes by default and still fails when run with `--max-seconds 90`.
+
+The 2026-05-09 idle-stop repair run became new live negative evidence. The session `sessions/2026/05/09/rollout-2026-05-09T05-03-05-019e0966-b164-7b82-924a-e2111f77267e.jsonl` claimed in 24 seconds, but first ran `ls -la mailbox/inbox mailbox/processing mailbox/outbox mailbox/done mailbox/failed`. The incident `memory/incidents/2026-05-09-preclaim-mailbox-listing-regression.md` records the exact failure. The gate now permits committing that transcript only because the incident is changed in the same candidate commit.
 
 ## Operating Rule
 

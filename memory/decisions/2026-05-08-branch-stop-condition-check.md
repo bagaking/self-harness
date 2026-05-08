@@ -5,7 +5,7 @@ type: "memory"
 status: "active"
 owner: "agent/no0_self_imporve"
 created: "2026-05-08"
-updated: "2026-05-08"
+updated: "2026-05-09"
 tags:
   - feedback-pressure
   - stop-condition
@@ -40,13 +40,15 @@ The check maps the latest five `run:` commits to changed top-level `mailbox/outb
 
 Completed `Next supervisor pressure:` debt requires an explicit source marker, not an arbitrary lifecycle-file path mention. The generic marker is `next-pressure-source: <source-outbox>`. Existing pressure-specific markers may also satisfy the check when they name the same source; currently `continuous-pressure-source: <source-outbox>` is accepted because it is the marker emitted by the continuous supervisor pressure mechanism.
 
+Completed return-to-main candidate review also requires an explicit source marker. Use `main-readiness-source: <source-outbox>` in a later mailbox lifecycle or outbox record only after the candidate claim has been reviewed and bounded as still branch-local, deferred, or supervisor-owned. This marker prevents one old reviewed `Return-to-main judgment: candidate` line from blocking idle stop forever, while preserving the failure for fresh unreviewed candidate claims. The parser treats only lines whose return-to-main value starts with a positive opener such as `candidate`, `yes`, `ready`, or `promote` as positive; a line that starts with `no`, `defer`, `blocked`, or `branch-local` remains negative even if later prose mentions promotion.
+
 The fixture command is:
 
 ```text
 scripts/branch-stop-condition-fixture-check.sh
 ```
 
-It proves one pass case and four failure cases: marker-covered pressure may stop, unresolved next-pressure debt fails, incidental lifecycle path references fail, unchallenged review evidence fails, and branch-local main-readiness claims fail.
+It proves pass and failure cases: marker-covered pressure may stop, unresolved next-pressure debt fails, incidental lifecycle path references fail, unchallenged review evidence fails, unreviewed branch-local main-readiness claims fail, reviewed main-readiness claims with `main-readiness-source:` may stop, and negative return-to-main lines with later positive words do not false-positive.
 
 Current decision: the sampled branch pressure line is stop-safe only after the check passes. Passing this check is not a return-to-main signal; branch-local pressure machinery remains deferred unless the supervisor collects repeated non-noisy evidence across real cycles.
 

@@ -117,6 +117,12 @@ has_trigger_review_marker_for_source() {
   has_named_source_marker_for_source "trigger-review-source" "$source_rel"
 }
 
+has_main_readiness_marker_for_source() {
+  local source_rel="$1"
+
+  has_named_source_marker_for_source "main-readiness-source" "$source_rel"
+}
+
 extract_marker_value() {
   local marker="$1"
   local rel="$2"
@@ -177,11 +183,14 @@ main_readiness_line_is_positive() {
   value="$(printf '%s\n' "$line" | sed -E 's/^[0-9]+://; s/^Return-to-main( judgment)?:[[:space:]]*//')"
 
   printf '%s\n' "$value" \
+    | LC_ALL=C rg -qi '^(candidate|yes|ready|promot(e|ion)|main-worthy|main worthy|return.*main)' \
+    && return 0
+
+  printf '%s\n' "$value" \
     | LC_ALL=C rg -qi '^(defer|deferred|blocked|branch-local|no([[:space:].,]|$)|not ready|should not|stay off `?main`?)' \
     && return 1
 
-  printf '%s\n' "$value" \
-    | LC_ALL=C rg -qi '(candidate|yes|ready|promot(e|ion)|main-worthy|main worthy|return.*main)'
+  return 1
 }
 
 check_recent_outbox_stop_debt() {
@@ -205,9 +214,12 @@ check_recent_outbox_stop_debt() {
     while IFS= read -r line; do
       [ -n "$line" ] || continue
       if main_readiness_line_is_positive "$line"; then
-        echo "branch-stop-condition-check: recent outbox claims main readiness without a stop-safe deferral in ${rel}" >&2
-        echo "branch-stop-condition-check: ${line}" >&2
-        errors=$((errors + 1))
+        if ! has_main_readiness_marker_for_source "$rel"; then
+          echo "branch-stop-condition-check: recent outbox claims main readiness without a stop-safe deferral in ${rel}" >&2
+          echo "branch-stop-condition-check: expected main-readiness-source marker after review" >&2
+          echo "branch-stop-condition-check: ${line}" >&2
+          errors=$((errors + 1))
+        fi
       fi
     done < <(LC_ALL=C rg -n '^Return-to-main( judgment)?:' "${ROOT_DIR}/${rel}" || true)
   done <<EOF
