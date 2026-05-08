@@ -17,6 +17,8 @@ source: "mailbox"
 confidence: "high"
 related:
   - "mailbox-inbox-2026-05-08-032901-feedback-pressure-continuous-supervision"
+  - "mailbox-inbox-2026-05-08-042307-continuous-supervisor-pressure"
+  - "mailbox/outbox/2026-05-08-post-run-continuous-pressure-proof-reply.md"
   - "scripts/supervisor.sh"
   - "scripts/continuous-supervisor-pressure-check.sh"
 ---
@@ -30,6 +32,12 @@ Idle supervisor cycles should not stop merely because the inbox is clean when th
 `scripts/supervisor.sh` now checks recent `run:` commits after trigger-review seeding and before the older repeated-low-value heuristic. If a changed top-level `mailbox/outbox/*.md` file contains both an explicit `Next supervisor pressure:` marker and deferred proof or promotion language, the supervisor seeds one `mailbox/inbox/*-continuous-supervisor-pressure.md` challenge.
 
 The generated inbox records `continuous-pressure-source: <source>` in frontmatter and body. That marker is searched across mailbox lifecycle directories so the same source cannot be reissued repeatedly.
+
+## Source Handling Clarification
+
+A generated continuous-pressure inbox is the lifecycle marker for its source. If a later run already proved the source requirement and a continuous-pressure inbox for that source is now claimed, the useful action is to write a bounded closure and move the input to `mailbox/done/`.
+
+Do not create a second challenge or a new pressure mechanism solely because the earlier proof artifact quoted generated challenge frontmatter. The real anti-repeat boundary is the durable mailbox lifecycle marker, especially the unquoted body line `continuous-pressure-source: <source>` preserved when the claimed input moves to `mailbox/done/`.
 
 ## Anti-Noise Boundary
 
