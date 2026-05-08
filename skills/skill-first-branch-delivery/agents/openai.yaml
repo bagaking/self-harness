@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill First Branch Delivery"
+  short_description: "Package branch results as reusable skills"
+  default_prompt: "Use $skill-first-branch-delivery to package branch-agent results as skill-first, evidence-backed return-to-main candidates."
