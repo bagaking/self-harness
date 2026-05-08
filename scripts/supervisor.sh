@@ -32,6 +32,7 @@ DEFAULT_CODEX_IDLE_TIMEOUT_SECONDS=300
 DEFAULT_CODEX_WATCHDOG_POLL_SECONDS=10
 DEFAULT_AUTO_CHALLENGE=1
 DEFAULT_TRIGGER_REVIEW_LIMIT=8
+DEFAULT_CONTINUOUS_PRESSURE_LIMIT=3
 NEXT_PRESSURE_MARKER_PATTERN='^Next supervisor pressure:[[:space:]]*.'
 STATUS_NOTIFY_DEDUP_FILE="${RUN_DIR}/supervisor-notify-last-key"
 
@@ -49,6 +50,7 @@ CODEX_IDLE_TIMEOUT_SECONDS="${SELF_HARNESS_CODEX_IDLE_TIMEOUT_SECONDS:-$DEFAULT_
 CODEX_WATCHDOG_POLL_SECONDS="${SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS:-$DEFAULT_CODEX_WATCHDOG_POLL_SECONDS}"
 AUTO_CHALLENGE="${SELF_HARNESS_AUTO_CHALLENGE:-$DEFAULT_AUTO_CHALLENGE}"
 TRIGGER_REVIEW_LIMIT="${SELF_HARNESS_TRIGGER_REVIEW_LIMIT:-$DEFAULT_TRIGGER_REVIEW_LIMIT}"
+CONTINUOUS_PRESSURE_LIMIT="${SELF_HARNESS_CONTINUOUS_PRESSURE_LIMIT:-$DEFAULT_CONTINUOUS_PRESSURE_LIMIT}"
 
 command_needs_stable_supervisor() {
   case "${1:-}" in
@@ -132,6 +134,7 @@ Environment:
   SELF_HARNESS_CODEX_WATCHDOG_POLL_SECONDS Watchdog poll interval. Default: 10.
   SELF_HARNESS_AUTO_CHALLENGE     Set to 0 to skip automatic progressive challenges on idle agent branches.
   SELF_HARNESS_TRIGGER_REVIEW_LIMIT Max trigger records inspected for trigger-review idle challenges. Default: 8.
+  SELF_HARNESS_CONTINUOUS_PRESSURE_LIMIT Recent commits inspected for deferred proof-debt idle challenges. Default: 3.
   SELF_HARNESS_CODEX_ARGS             Extra args passed to codex exec/resume.
   SELF_HARNESS_SKIP_COMMIT            Set to 1 to skip post-run commits.
   SELF_HARNESS_NOTIFY_CHAT_ID         Optional lark-cli chat recipient for supervisor status.
@@ -395,6 +398,17 @@ trigger_review_limit_is_valid() {
   esac
 }
 
+continuous_pressure_limit_is_valid() {
+  case "$CONTINUOUS_PRESSURE_LIMIT" in
+    ''|*[!0-9]*)
+      return 1
+      ;;
+    *)
+      [ "$CONTINUOUS_PRESSURE_LIMIT" -gt 0 ]
+      ;;
+  esac
+}
+
 trigger_review_evidence_records() {
   "${ROOT_DIR}/scripts/supervisor-evaluation-trigger-list.sh" \
     --status review \
@@ -509,6 +523,141 @@ seed_trigger_review_challenge_if_needed() {
   fi
 }
 
+recent_run_outbox_files() {
+  local commit
+  git -C "$ROOT_DIR" log --format='%H %s' -n 64 2>/dev/null \
+    | awk '/^[^ ]+ run:/ { print $1 }' \
+    | head -n "$CONTINUOUS_PRESSURE_LIMIT" \
+    | while IFS= read -r commit; do
+        [ -n "$commit" ] || continue
+        git -C "$ROOT_DIR" show --name-only --format= "$commit" -- mailbox/outbox 2>/dev/null \
+          | awk '$0 ~ /^mailbox\/outbox\/[^\/]+\.md$/ { print }'
+      done \
+    | awk 'NF && !seen[$0]++'
+}
+
+outbox_has_continuous_pressure_debt() {
+  local rel="$1"
+  local file="${ROOT_DIR}/${rel}"
+  [ -f "$file" ] || return 1
+
+  LC_ALL=C rg -qi -- 'return-to-main judgment:[[:space:]]*(defer|deferred|blocked|no v[0-9]* promotion)|v[0-9]+ .*blocked|v[0-9]+ .*supersession|post-commit.*proof|checked-out.*proof|main-targeted patch|candidate gene paths|promotion.*blocked' "$file" || return 1
+
+  LC_ALL=C rg -q -- "$NEXT_PRESSURE_MARKER_PATTERN" "$file"
+}
+
+continuous_pressure_sources() {
+  local rel
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    outbox_has_continuous_pressure_debt "$rel" && printf '%s\n' "$rel"
+  done < <(recent_run_outbox_files)
+}
+
+has_existing_continuous_pressure_challenge_for_source() {
+  local source_rel="$1"
+  local file
+  [ -n "$source_rel" ] || return 1
+
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    LC_ALL=C rg -q --fixed-strings "continuous-pressure-source: ${source_rel}" "$file" && return 0
+  done < <(find \
+    "${ROOT_DIR}/mailbox/inbox" \
+    "${ROOT_DIR}/mailbox/processing" \
+    "${ROOT_DIR}/mailbox/done" \
+    "${ROOT_DIR}/mailbox/failed" \
+    "${ROOT_DIR}/mailbox/outbox" \
+    -maxdepth 1 -type f -name '*.md' 2>/dev/null)
+
+  return 1
+}
+
+write_continuous_pressure_challenge() {
+  local id="$1"
+  local branch="$2"
+  local date_value="$3"
+  local source_rel="$4"
+  local requirement="$5"
+  local file="${ROOT_DIR}/mailbox/inbox/${id}.md"
+
+  cat >"$file" <<EOF
+---
+title: "Continuous Supervisor Pressure Challenge"
+id: "mailbox-inbox-${id}"
+type: "mailbox-inbox"
+status: "pending"
+owner: "supervisor"
+created: "${date_value}"
+updated: "${date_value}"
+from: "supervisor"
+to: "${branch}"
+message_id: "${id}"
+tags:
+  - supervisor
+  - feedback-pressure
+  - continuous-supervision
+  - self-improvement
+summary: "Asks the branch agent to resolve or strictly defer an explicit proof or promotion debt before idle stop."
+related:
+  - "${source_rel}"
+continuous-pressure-source: "${source_rel}"
+---
+
+# Continuous Supervisor Pressure Challenge
+
+The supervisor generated this because there was no pending inbox and a recent run-linked outbox report declared unresolved proof or return-to-main debt. A clean mailbox is not enough to stop while recent branch evidence names a concrete promotion or proof requirement.
+
+continuous-pressure-source: ${source_rel}
+
+## Source Requirement
+
+${requirement}
+
+## Task
+
+Use the source report to raise the proof bar without creating generic churn.
+
+1. Review \`${source_rel}\` before broad repository inspection.
+2. Decide whether the named debt is now satisfied, still blocked, or needs one smaller executable proof.
+3. Produce exactly one focused mechanism, proof artifact, or bounded refusal with rerunnable evidence.
+4. Preserve the anti-noise boundary: do not repeat an already-covered source, do not make a generic repository sweep, and do not promote branch-local evidence as a main candidate.
+5. Keep durable paths repository-relative, do not modify \`constitution/\`, and run \`scripts/docs-check.sh\` before finishing.
+EOF
+}
+
+seed_continuous_pressure_challenge_if_needed() {
+  [ "$AUTO_CHALLENGE" = "1" ] || return 0
+  is_agent_branch || return 0
+  has_pending_inbox && return 0
+
+  if ! continuous_pressure_limit_is_valid; then
+    log "continuous pressure challenge skipped: invalid SELF_HARNESS_CONTINUOUS_PRESSURE_LIMIT=${CONTINUOUS_PRESSURE_LIMIT}"
+    return 0
+  fi
+
+  local source_rel found_source=0
+  while IFS= read -r source_rel; do
+    [ -n "$source_rel" ] || continue
+    found_source=1
+    has_existing_continuous_pressure_challenge_for_source "$source_rel" && continue
+
+    local branch id date_value requirement
+    branch="$(current_branch)"
+    id="$(date -u +"%Y-%m-%d-%H%M%S-continuous-supervisor-pressure")"
+    date_value="$(date -u +"%Y-%m-%d")"
+    requirement="$(extract_next_pressure_requirement "$source_rel")"
+    [ -n "$requirement" ] || continue
+    write_continuous_pressure_challenge "$id" "$branch" "$date_value" "$source_rel" "$requirement"
+    log "seeded continuous pressure challenge: mailbox/inbox/${id}.md from ${source_rel}"
+    return 0
+  done < <(continuous_pressure_sources)
+
+  if [ "$found_source" -eq 1 ]; then
+    log "continuous pressure challenge skipped: all proof-debt sources already challenged"
+  fi
+}
+
 write_progressive_challenge() {
   local id="$1"
   local branch="$2"
@@ -577,6 +726,9 @@ seed_progressive_challenge_if_needed() {
   fi
 
   seed_trigger_review_challenge_if_needed
+  has_pending_inbox && return 0
+
+  seed_continuous_pressure_challenge_if_needed
   has_pending_inbox && return 0
 
   if ! has_recent_low_value_feedback; then
