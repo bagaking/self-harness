@@ -162,7 +162,33 @@ write_trigger_needles() {
   local out_file="$2"
 
   printf '%s\n' "$trigger" | awk '
-    function is_ignored_needle(lower_value) {
+    function context_tail(value, width, start) {
+      start = length(value) - width + 1
+      if (start < 1) {
+        start = 1
+      }
+      return substr(value, start)
+    }
+    function has_concrete_outbox_artifact_prefix(lower_prefix, tail) {
+      tail = context_tail(lower_prefix, 120)
+      return (tail ~ /(concrete|changed|proof|target|patch|outbox markdown|outbox-markdown|markdown)[^`]{0,80}(artifact|record|file|path)/ ||
+              tail ~ /(artifact|record|file|path)[^`]{0,80}(concrete|changed|proof|target|patch|outbox markdown|outbox-markdown|markdown)/)
+    }
+    function is_trigger_review_meta_needle(lower_value, lower_prefix) {
+      if (!trigger_review_meta) {
+        return 0
+      }
+      if (lower_value ~ /^mailbox\/outbox\/[^[:space:]]+\.md$/ &&
+          !has_concrete_outbox_artifact_prefix(lower_prefix)) {
+        return 1
+      }
+      if (lower_value == "scripts/supervisor-evaluation-trigger-list.sh" &&
+          context_tail(lower_prefix, 80) ~ /defect against[[:space:]]*$/) {
+        return 1
+      }
+      return 0
+    }
+    function is_ignored_needle(lower_value, lower_prefix) {
       if (lower_value == "no next supervisor pressure:" ||
           lower_value == "supervisor evaluation trigger:" ||
           lower_value == "next supervisor pressure:" ||
@@ -184,8 +210,7 @@ write_trigger_needles() {
           lower_value ~ /--status[[:space:]]+review/) {
         return 1
       }
-      if (trigger_review_meta &&
-          lower_value ~ /^mailbox\/outbox\/[^[:space:]]+\.md$/) {
+      if (is_trigger_review_meta_needle(lower_value, lower_prefix)) {
         return 1
       }
       return 0
@@ -193,11 +218,12 @@ write_trigger_needles() {
     {
       text = $0
       lower_text = tolower(text)
-      trigger_review_meta = (lower_text ~ /scripts\/supervisor\.sh[[:space:]]+triggers/ && lower_text ~ /(gains new later evidence|review-evidence source|trigger-review source)/)
+      trigger_review_meta = (lower_text ~ /scripts\/supervisor\.sh[[:space:]]+triggers/ && lower_text ~ /(gains new later evidence|review-evidence source|trigger-review source|reappears only because[^.]*later record[^.]*repeats|listed only because[^.]*repeats|source-path meta)/)
       while (match(text, /`[^`]+`/)) {
         value = substr(text, RSTART + 1, RLENGTH - 2)
         lower_value = tolower(value)
-        if (length(value) > 0 && !is_ignored_needle(lower_value) && value ~ /[.\/:_ -]/) {
+        lower_prefix = tolower(substr(text, 1, RSTART - 1))
+        if (length(value) > 0 && !is_ignored_needle(lower_value, lower_prefix) && value ~ /[.\/:_ -]/) {
           print value
         }
         text = substr(text, RSTART + RLENGTH)

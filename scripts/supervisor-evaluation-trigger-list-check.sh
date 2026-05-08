@@ -575,6 +575,80 @@ OUTBOX
   log "ignores trigger-review source path meta terms without changed-artifact evidence"
 }
 
+check_ignores_trigger_review_repeated_source_path_current_wording() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-repeated-source-path-current-wording"
+  log_file="${WORK_DIR}/trigger-review-repeated-source-path-current-wording.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-trigger-review-source-path-meta.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-trigger-review-source-path-meta"
+title: "Trigger Review Source Path Meta"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "trigger-review-source-path-meta"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal using repeated-source wording."
+related: []
+---
+
+# Trigger Review Source Path Meta
+
+No next supervisor pressure: further escalation for `mailbox/outbox/2026-05-08-trigger-review-v3-covered-refusal-reply.md` would be noisy because the recursive source-path meta match is covered.
+
+Supervisor evaluation trigger: run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3` after this commit; if `mailbox/outbox/2026-05-08-trigger-review-v3-covered-refusal-reply.md` reappears only because a later record repeats `mailbox/outbox/2026-05-08-status-sync-v3-proof-reply.md`, file a defect against `scripts/supervisor-evaluation-trigger-list.sh`.
+
+Stop condition: if only repeated source paths appear, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: trigger review repeated source path"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-later-dossier.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-dossier"
+title: "Later Dossier"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-dossier"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later record that repeats only source-path meta terms."
+related: []
+---
+
+# Later Dossier
+
+The review discusses `mailbox/outbox/2026-05-08-trigger-review-v3-covered-refusal-reply.md`, repeats `mailbox/outbox/2026-05-08-status-sync-v3-proof-reply.md`, and cites `scripts/supervisor-evaluation-trigger-list.sh`, but it names no changed artifact.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "repeated source-path wording should not create trigger-review evidence"
+  }
+  log "ignores trigger-review repeated source-path current wording"
+}
+
 check_surfaces_trigger_review_concrete_artifact_terms() {
   local sandbox log_file
   sandbox="${WORK_DIR}/trigger-review-concrete-artifact"
@@ -657,6 +731,83 @@ OUTBOX
   log "surfaces trigger-review concrete changed artifact evidence"
 }
 
+check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-concrete-outbox-markdown-artifact"
+  log_file="${WORK_DIR}/trigger-review-concrete-outbox-markdown-artifact.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-trigger-review-concrete-outbox-markdown-artifact.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-trigger-review-concrete-outbox-markdown-artifact"
+title: "Trigger Review Concrete Outbox Markdown Artifact"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "trigger-review-concrete-outbox-markdown-artifact"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal with a concrete outbox Markdown artifact path."
+related: []
+---
+
+# Trigger Review Concrete Outbox Markdown Artifact
+
+No next supervisor pressure: further trigger-review escalation for the source would be noisy unless a concrete outbox Markdown artifact appears.
+
+Supervisor evaluation trigger: run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3`; if concrete outbox Markdown artifact `mailbox/outbox/2026-05-08-main-target-review-artifact.md` appears as later evidence, issue one artifact-specific review challenge.
+
+Stop condition: if only source paths repeat, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: trigger review concrete outbox markdown artifact"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-main-target-review-artifact.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-main-target-review-artifact"
+title: "Main Target Review Artifact"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "main-target-review-artifact"
+tags:
+  - mailbox
+summary: "Fixture concrete outbox Markdown artifact."
+related: []
+---
+
+# Main Target Review Artifact
+
+This is the concrete outbox Markdown artifact requested by the trigger.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'status: review-evidence' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "concrete outbox Markdown artifact term should create review evidence"
+  }
+  rg -q 'mailbox/outbox/2026-05-08-main-target-review-artifact.md' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "later concrete outbox Markdown artifact should be named"
+  }
+  log "surfaces trigger-review concrete outbox Markdown artifact evidence"
+}
+
 main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
@@ -669,7 +820,9 @@ main() {
   check_existing_file_old_term_does_not_count_after_unrelated_edit
   check_ignores_trigger_review_scaffold_only_terms
   check_ignores_trigger_review_source_path_meta_terms
+  check_ignores_trigger_review_repeated_source_path_current_wording
   check_surfaces_trigger_review_concrete_artifact_terms
+  check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms
   log "ok"
 }
 
