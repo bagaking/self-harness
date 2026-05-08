@@ -5,7 +5,7 @@ type: "memory"
 status: "active"
 owner: "agent"
 created: "2026-05-07"
-updated: "2026-05-08"
+updated: "2026-05-09"
 tags:
   - decision
   - supervisor
@@ -22,6 +22,7 @@ related:
   - "mailbox-outbox-2026-05-07-124332-trigger-evidence-precision-reply"
   - "mailbox-inbox-2026-05-08-020741-trigger-review-pressure-challenge"
   - "mailbox-inbox-2026-05-08-024439-trigger-review-pressure-challenge"
+  - "mailbox-inbox-2026-05-08-194009-trigger-review-pressure-challenge"
   - "scripts/supervisor-evaluation-trigger-list.sh"
   - "scripts/supervisor-evaluation-trigger-list-check.sh"
 ---
@@ -53,6 +54,8 @@ The post-run continuous-pressure proof on 2026-05-08 exposed one more equivalent
 
 The next trigger-review pressure run exposed a related command-citation false positive. The source-path-meta trigger asked the supervisor to run `scripts/supervisor-evaluation-trigger-list-check.sh` and reopen only if the source-path-meta reply returned or the concrete outbox Markdown artifact fixture failed. Later proof records cited the validation command as passing evidence, which should not by itself reopen the trigger. The matcher now ignores that fixture-check command only inside trigger-review meta lines where the concrete condition is a fixture failure; concrete outbox Markdown artifact paths still surface as review evidence.
 
+On 2026-05-09 another live trigger-review challenge exposed a read-only script-reference false positive. The source trigger watched supervisor control-plane script paths and notification environment semantics. Later mailbox records reviewed those scripts or confirmed no script change, which is not evidence that a watched script changed. The matcher now ignores added lines that only review, read, or inspect a backticked script path, explicitly say the script did not change, restate the source trigger condition, cite validation commands against watched script paths, or describe the positive fixture itself. It also ignores code-block path list lines that contain only the script path. Separate positive fixture coverage proves that a later durable report saying a watched supervisor script changed still creates review evidence.
+
 ## Why
 
 The previous feedback gate made refusals name a future trigger, but a future supervisor still had to remember to surface and evaluate those triggers. A clean mailbox plus `task_complete` could still look sufficient even when a trigger-backed refusal had later evidence.
@@ -83,6 +86,9 @@ The fixture proves these cases:
 - repeated source-path prose wording does not create trigger-review evidence by itself.
 - trigger-review fixture validation command citations do not create trigger-review evidence by themselves.
 - trigger-review concrete outbox Markdown artifact terms still create review evidence.
+- read-only reviewed script path mentions and explicit no-change lines do not create review evidence.
+- durable reports that explicitly say a watched supervisor script changed still create review evidence.
+- script trigger restatement prose and script-path validation commands do not create review evidence.
 
 Live evidence on this branch: `scripts/supervisor.sh triggers --limit 5 --status review` surfaced `mailbox/outbox/2026-05-07-feedback-refusal-trigger-reply.md` and pointed to later durable evidence from this run. `scripts/supervisor.sh triggers --limit 5 --status quiet` listed this run's uncommitted trigger-source reply as `no-later-evidence`, which keeps same-run notes from masquerading as later proof before the supervisor commit exists.
 

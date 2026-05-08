@@ -1167,6 +1167,233 @@ OUTBOX
   log "ignores supervisor trigger-review meta prose"
 }
 
+check_ignores_reviewed_supervisor_script_prose() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/supervisor-script-reviewed-prose"
+  log_file="${WORK_DIR}/supervisor-script-reviewed-prose.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-supervisor-script-trigger.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-supervisor-script-trigger"
+title: "Supervisor Script Trigger"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "supervisor-script-trigger"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture trigger using the supervisor script path."
+related: []
+---
+
+# Supervisor Script Trigger
+
+No next supervisor pressure: further escalation would be noisy because the supervisor script did not change.
+
+Supervisor evaluation trigger: reopen pressure if later durable evidence shows a change to `scripts/supervisor.sh`.
+
+Stop condition: if later records only cite required review of the script without changing it, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: supervisor script trigger"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-later-reviewed-prose.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-reviewed-prose"
+title: "Later Reviewed Prose"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-reviewed-prose"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later prose that says the script was reviewed."
+related: []
+---
+
+# Later Reviewed Prose
+
+I reviewed `scripts/supervisor.sh` before choosing the response, and the script did not change in this run.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "reviewed supervisor script prose should not create review evidence"
+  }
+  log "ignores reviewed supervisor script prose"
+}
+
+check_surfaces_supervisor_script_changed_report() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/supervisor-script-report"
+  log_file="${WORK_DIR}/supervisor-script-report.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-supervisor-script-trigger.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-supervisor-script-trigger"
+title: "Supervisor Script Trigger"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "supervisor-script-trigger"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture trigger using the supervisor script path."
+related: []
+---
+
+# Supervisor Script Trigger
+
+No next supervisor pressure: further escalation would be noisy because the supervisor script needs review after real script changes.
+
+Supervisor evaluation trigger: reopen pressure if later durable evidence shows a change to `scripts/supervisor.sh`.
+
+Stop condition: if no script path changes, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: supervisor script trigger"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-later-script-change.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-script-change"
+title: "Later Script Change"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-script-change"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later durable evidence that says the script changed."
+related: []
+---
+
+# Later Script Change
+
+This report changed `scripts/supervisor.sh` and needs one defect-specific review.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'status: review-evidence' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "supervisor script changed report should create review evidence"
+  }
+  rg -q 'mailbox/outbox/2026-05-08-later-script-change.md' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "supervisor script changed report evidence should be named"
+  }
+  log "surfaces supervisor script changed reports"
+}
+
+check_ignores_script_trigger_restatement_prose() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/supervisor-script-trigger-restatement"
+  log_file="${WORK_DIR}/supervisor-script-trigger-restatement.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-supervisor-script-trigger.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-supervisor-script-trigger"
+title: "Supervisor Script Trigger"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "supervisor-script-trigger"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture trigger using the supervisor script path."
+related: []
+---
+
+# Supervisor Script Trigger
+
+No next supervisor pressure: further escalation would be noisy because script-change evidence is already covered.
+
+Supervisor evaluation trigger: reopen pressure if later durable evidence shows a change to `scripts/supervisor.sh` or `scripts/supervisor-notify.sh`.
+
+Stop condition: if later records only restate the trigger or validation commands, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: supervisor script trigger"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-later-trigger-restatement.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-trigger-restatement"
+title: "Later Trigger Restatement"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-trigger-restatement"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later prose that restates script trigger conditions."
+related: []
+---
+
+# Later Trigger Restatement
+
+The source trigger asked for a challenge if `scripts/supervisor.sh` or `scripts/supervisor-notify.sh` changed.
+
+`git log --oneline --name-status -- scripts/supervisor.sh scripts/supervisor-notify.sh`
+
+The positive fixture proves that a later durable report saying it changed `scripts/supervisor.sh` still creates review evidence.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "script trigger restatement prose should not create review evidence"
+  }
+  log "ignores script trigger restatement prose"
+}
+
 main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
@@ -1187,6 +1414,9 @@ main() {
   check_ignores_directory_prefix_trigger_prose_mentions
   check_surfaces_directory_prefix_changed_path
   check_ignores_supervisor_trigger_review_meta_prose
+  check_ignores_reviewed_supervisor_script_prose
+  check_surfaces_supervisor_script_changed_report
+  check_ignores_script_trigger_restatement_prose
   log "ok"
 }
 

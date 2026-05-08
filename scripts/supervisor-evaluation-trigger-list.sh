@@ -277,6 +277,17 @@ content_stream_contains_needle() {
       if (lower_needle ~ /\/$/) {
         return 1
       }
+      if (lower_needle ~ /^scripts\/[^[:space:]]+\.sh$/) {
+        normalized_line = lower_line
+        gsub(/^[[:space:]`]+/, "", normalized_line)
+        gsub(/[[:space:]`,.;:]+$/, "", normalized_line)
+        if (normalized_line == lower_needle) {
+          return 1
+        }
+        if (lower_line ~ /^[[:space:]`]*(git[[:space:]]+(log|diff|show)|scripts\/shell-syntax-check\.sh)[[:space:]]/) {
+          return 1
+        }
+      }
       if (lower_needle == "scripts/supervisor.sh" &&
           lower_line ~ /scripts\/supervisor\.sh[[:space:]]+triggers/ &&
           lower_line ~ /--status[[:space:]]+review/) {
@@ -284,6 +295,19 @@ content_stream_contains_needle() {
       }
       if (lower_needle == "scripts/supervisor.sh" &&
           lower_line ~ /(command citation|content match|content matches|trigger-review command|trigger review command)/) {
+        return 1
+      }
+      if (lower_needle ~ /^scripts\/[^[:space:]]+\.sh$/ &&
+          lower_line ~ /(did not change|did not modify|did not update|didn'\''t change|not changed|no tracked diff|unchanged|without changing|without a script change)/) {
+        return 1
+      }
+      if (lower_needle ~ /^scripts\/[^[:space:]]+\.sh$/ &&
+          lower_line ~ /(no .*chang|trigger said|trigger asked|trigger.*asked|source trigger|reopen if|reopen only if|issue one defect-specific|supervisor evaluation trigger:|positive fixture|fixture proves)/) {
+        return 1
+      }
+      if (lower_needle ~ /^scripts\/[^[:space:]]+\.sh$/ &&
+          lower_line ~ /(review|reviewed|read|reading|required|inspect|inspected|loaded)/ &&
+          lower_line !~ /(chang|modif|updat|patch|add|remov)/) {
         return 1
       }
       return 0
