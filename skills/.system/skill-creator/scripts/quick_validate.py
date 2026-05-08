@@ -7,9 +7,109 @@ import re
 import sys
 from pathlib import Path
 
-import yaml
+try:
+    import yaml
+except ModuleNotFoundError:
+    yaml = None
 
 MAX_SKILL_NAME_LENGTH = 64
+
+
+class FrontmatterError(ValueError):
+    """Raised when SKILL.md frontmatter cannot be parsed."""
+
+
+def parse_simple_frontmatter(frontmatter_text):
+    """Parse the simple YAML mappings used by repository SKILL.md files."""
+    frontmatter = {}
+    current_map = None
+
+    for line_number, raw_line in enumerate(frontmatter_text.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
+
+        if indent == 0:
+            current_map = None
+            target = frontmatter
+        elif indent == 2:
+            if current_map is None:
+                raise FrontmatterError(
+                    "PyYAML is unavailable and the fallback parser only supports "
+                    f"one-level nested mappings (line {line_number})"
+                )
+            target = current_map
+        else:
+            raise FrontmatterError(
+                "PyYAML is unavailable and the fallback parser only supports "
+                f"top-level scalars and one-level nested mappings (line {line_number})"
+            )
+
+        if line.startswith("-"):
+            raise FrontmatterError(
+                "PyYAML is unavailable and the fallback parser does not support "
+                f"sequences (line {line_number})"
+            )
+        if ":" not in line:
+            raise FrontmatterError(f"Invalid frontmatter line {line_number}: missing ':'")
+
+        key, value = line.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            raise FrontmatterError(f"Invalid frontmatter line {line_number}: empty key")
+        if not value and indent == 0:
+            frontmatter[key] = {}
+            current_map = frontmatter[key]
+            continue
+        if not value:
+            raise FrontmatterError(
+                "PyYAML is unavailable and the fallback parser does not support "
+                f"nested or multiline values (line {line_number})"
+            )
+
+        target[key] = parse_simple_scalar(value, line_number)
+
+    return frontmatter
+
+
+def parse_simple_scalar(value, line_number):
+    """Parse a conservative subset of YAML scalar values."""
+    if value[0] in "\"'":
+        quote = value[0]
+        if len(value) < 2 or value[-1] != quote:
+            raise FrontmatterError(f"Invalid quoted scalar on line {line_number}")
+        return value[1:-1]
+
+    if value[0] in "[]{}|>&*!":
+        raise FrontmatterError(
+            "PyYAML is unavailable and the fallback parser does not support "
+            f"complex scalar values (line {line_number})"
+        )
+
+    lower_value = value.lower()
+    if lower_value in {"true", "false"}:
+        return lower_value == "true"
+    if lower_value in {"null", "~"}:
+        return None
+    if re.match(r"^[+-]?\d+$", value):
+        return int(value)
+    if re.match(r"^[+-]?\d+\.\d+$", value):
+        return float(value)
+
+    return value
+
+
+def load_frontmatter(frontmatter_text):
+    """Load frontmatter with PyYAML when available, otherwise use a local fallback."""
+    if yaml is not None:
+        try:
+            return yaml.safe_load(frontmatter_text)
+        except yaml.YAMLError as e:
+            raise FrontmatterError(e) from e
+
+    return parse_simple_frontmatter(frontmatter_text)
 
 
 def validate_skill(skill_path):
@@ -31,10 +131,10 @@ def validate_skill(skill_path):
     frontmatter_text = match.group(1)
 
     try:
-        frontmatter = yaml.safe_load(frontmatter_text)
+        frontmatter = load_frontmatter(frontmatter_text)
         if not isinstance(frontmatter, dict):
             return False, "Frontmatter must be a YAML dictionary"
-    except yaml.YAMLError as e:
+    except FrontmatterError as e:
         return False, f"Invalid YAML in frontmatter: {e}"
 
     allowed_properties = {"name", "description", "license", "allowed-tools", "metadata"}
