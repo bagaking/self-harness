@@ -879,6 +879,84 @@ OUTBOX
   log "ignores trigger-review fixture validation command citations"
 }
 
+check_ignores_trigger_review_source_path_trigger_condition() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-source-path-trigger-condition"
+  log_file="${WORK_DIR}/trigger-review-source-path-trigger-condition.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-09-trigger-review-script-prose.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-trigger-review-script-prose"
+title: "Trigger Review Script Prose"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-09"
+updated: "2026-05-09"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "trigger-review-script-prose"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal whose trigger names a prior source path."
+related: []
+---
+
+# Trigger Review Script Prose
+
+No next supervisor pressure: further escalation for this source would be noisy because the live review no longer lists it after the false-positive repair.
+
+Supervisor evaluation trigger: run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3` and `scripts/supervisor-evaluation-trigger-list-check.sh`; reopen only if `mailbox/outbox/2026-05-09-trigger-review-satisfied-skill-first-pressure-reply.md` reappears from read-only or trigger-restatement `scripts/supervisor.sh` prose, or if the reviewed-script or trigger-restatement fixture fails.
+
+Stop condition: if the source stays absent from live trigger review and the fixture suite passes, retire this defect-specific pressure line.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: trigger review source path trigger condition"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-09-later-lifecycle-marker.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-lifecycle-marker"
+title: "Later Lifecycle Marker"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-09"
+updated: "2026-05-09"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-lifecycle-marker"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture later report that names only the source path as a lifecycle marker."
+related:
+  - "mailbox/outbox/2026-05-09-trigger-review-satisfied-skill-first-pressure-reply.md"
+---
+
+# Later Lifecycle Marker
+
+trigger-review-source: `mailbox/outbox/2026-05-09-trigger-review-satisfied-skill-first-pressure-reply.md`
+
+The source was classified as already covered. No read-only or trigger-restatement `scripts/supervisor.sh` prose appeared.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "trigger-review source path trigger condition should not fire from lifecycle marker prose"
+  }
+  log "ignores trigger-review source path trigger-condition lifecycle markers"
+}
+
 check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms() {
   local sandbox log_file
   sandbox="${WORK_DIR}/trigger-review-concrete-outbox-markdown-artifact"
@@ -1410,6 +1488,7 @@ main() {
   check_surfaces_trigger_review_concrete_artifact_terms
   check_ignores_trigger_review_repeated_source_path_prose_wording
   check_ignores_trigger_review_fixture_command_citation
+  check_ignores_trigger_review_source_path_trigger_condition
   check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms
   check_ignores_directory_prefix_trigger_prose_mentions
   check_surfaces_directory_prefix_changed_path

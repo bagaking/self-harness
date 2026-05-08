@@ -56,6 +56,8 @@ The next trigger-review pressure run exposed a related command-citation false po
 
 On 2026-05-09 another live trigger-review challenge exposed a read-only script-reference false positive. The source trigger watched supervisor control-plane script paths and notification environment semantics. Later mailbox records reviewed those scripts or confirmed no script change, which is not evidence that a watched script changed. The matcher now ignores added lines that only review, read, or inspect a backticked script path, explicitly say the script did not change, restate the source trigger condition, cite validation commands against watched script paths, or describe the positive fixture itself. It also ignores code-block path list lines that contain only the script path. Separate positive fixture coverage proves that a later durable report saying a watched supervisor script changed still creates review evidence.
 
+Later on 2026-05-09 the same source exposed a lifecycle-marker variant. A trigger-review stop condition can say a prior source path should reopen only if that source "reappears from" a narrow evidence class. A later report may name that source path only as `trigger-review-source:` or in related metadata while classifying it as covered. That lifecycle marker is not the watched evidence class. The matcher now treats "reappears from" trigger-review wording as source-path meta unless the trigger also names a concrete artifact path.
+
 ## Why
 
 The previous feedback gate made refusals name a future trigger, but a future supervisor still had to remember to surface and evaluate those triggers. A clean mailbox plus `task_complete` could still look sufficient even when a trigger-backed refusal had later evidence.
@@ -89,6 +91,7 @@ The fixture proves these cases:
 - read-only reviewed script path mentions and explicit no-change lines do not create review evidence.
 - durable reports that explicitly say a watched supervisor script changed still create review evidence.
 - script trigger restatement prose and script-path validation commands do not create review evidence.
+- trigger-review source paths inside a "reappears from" condition do not fire from later lifecycle-marker prose alone.
 
 Live evidence on this branch: `scripts/supervisor.sh triggers --limit 5 --status review` surfaced `mailbox/outbox/2026-05-07-feedback-refusal-trigger-reply.md` and pointed to later durable evidence from this run. `scripts/supervisor.sh triggers --limit 5 --status quiet` listed this run's uncommitted trigger-source reply as `no-later-evidence`, which keeps same-run notes from masquerading as later proof before the supervisor commit exists.
 
