@@ -12,7 +12,7 @@ tags:
   - feedback-pressure
   - continuous-supervision
   - control-plane
-summary: "Records the branch-local idle supervisor mechanism that seeds one bounded challenge from recent run-linked proof or promotion debt."
+summary: "Records the branch-local idle supervisor mechanism that seeds one bounded challenge from recent run-linked proof, promotion, or explicit-feedback ratchet debt."
 source: "mailbox"
 confidence: "high"
 related:
@@ -27,9 +27,11 @@ related:
 
 ## Decision
 
-Idle supervisor cycles should not stop merely because the inbox is clean when the latest run-linked outbox reports still declare explicit proof or return-to-main debt.
+Idle supervisor cycles should not stop merely because the inbox is clean when the latest run-linked outbox reports still declare explicit proof, return-to-main, or human/supervisor feedback ratchet debt.
 
 `scripts/supervisor.sh` now checks recent `run:` commits after trigger-review seeding and before the older repeated-low-value heuristic. If a changed top-level `mailbox/outbox/*.md` file contains both an explicit `Next supervisor pressure:` marker and deferred proof or promotion language, the supervisor seeds one `mailbox/inbox/*-continuous-supervisor-pressure.md` challenge.
+
+As of the 2026-05-08 feedback-pressure ratchet repair, the same idle scan also treats recent explicit-feedback runs with a `No next supervisor pressure:` refusal as unresolved continuous-pressure sources. This closes the stop-too-early gap where a local fixture pass could end a human feedback ratchet. The generated challenge requirement starts with `Explicit feedback ratchet remains open despite local refusal:` and quotes the local refusal as the current narrow closure, not as permission for the supervisor to stop raising the bar.
 
 The generated inbox records `continuous-pressure-source: <source>` in frontmatter and body. That marker is searched across mailbox lifecycle directories so the same source cannot be reissued repeatedly.
 
@@ -41,9 +43,9 @@ Do not create a second challenge or a new pressure mechanism solely because the 
 
 ## Anti-Noise Boundary
 
-Do not seed from arbitrary old history, non-run commits, clean `No next supervisor pressure:` stop conditions, or sources that already have a matching `continuous-pressure-source:` marker.
+Do not seed from arbitrary old history, non-run commits, clean `No next supervisor pressure:` stop conditions that are not tied to explicit feedback, or sources that already have a matching `continuous-pressure-source:` marker.
 
-This mechanism is for explicit unresolved proof or promotion debt, such as post-commit proof, checked-out proof, main-targeted patch, candidate gene path, or blocked return-to-main requirements. It is not a generic repository sweep trigger.
+This mechanism is for explicit unresolved proof or promotion debt, such as post-commit proof, checked-out proof, main-targeted patch, candidate gene path, blocked return-to-main requirements, or fresh human/supervisor feedback saying the branch stops too easily. It is not a generic repository sweep trigger.
 
 ## Verification
 
@@ -57,6 +59,8 @@ The fixture proves:
 
 - recent run-linked proof debt seeds exactly one challenge;
 - an existing `continuous-pressure-source:` lifecycle marker suppresses repeats;
+- recent explicit-feedback local refusal seeds exactly one challenge;
+- an existing `continuous-pressure-source:` marker for that explicit-feedback source suppresses repeats;
 - a completed clean stop condition does not seed;
 - non-run deferred outbox debt does not seed.
 

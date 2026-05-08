@@ -130,6 +130,50 @@ OUTBOX
   git -C "$sandbox" commit -q -m "run: Clean Stop Reply"
 }
 
+commit_explicit_feedback_refusal_outbox() {
+  local sandbox="$1"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-explicit-feedback-refusal-reply.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-explicit-feedback-refusal-reply"
+title: "Explicit Feedback Refusal Reply"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/continuous-pressure-check"
+to: "supervisor"
+message_id: "explicit-feedback-refusal-reply"
+tags:
+  - mailbox
+  - feedback-pressure
+  - explicit-feedback
+summary: "Fixture run that locally refuses more pressure despite explicit feedback."
+related: []
+---
+
+# Explicit Feedback Refusal Reply
+
+## Reviewed Evidence
+
+Human/supervisor feedback said the branch stops too easily and needs higher pressure.
+
+## Return-To-Main Judgment
+
+Return-to-main judgment: defer. The current fixture is branch-local.
+
+No next supervisor pressure: further escalation would be noisy because the local fixture passed.
+
+Supervisor evaluation trigger: run `scripts/supervisor.sh triggers --status review`; reopen if later evidence appears.
+
+Stop condition: stop only the local fixture pressure.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "run: Explicit Feedback Refusal Reply"
+}
+
 commit_non_run_deferred_outbox() {
   local sandbox="$1"
 
@@ -166,6 +210,7 @@ OUTBOX
 
 commit_existing_continuous_marker() {
   local sandbox="$1"
+  local source_rel="${2:-mailbox/outbox/2026-05-08-deferred-proof-reply.md}"
 
   cat >"${sandbox}/mailbox/done/2026-05-08-existing-continuous-pressure.md" <<'DONE'
 ---
@@ -183,15 +228,17 @@ tags:
   - mailbox
   - feedback-pressure
 related:
-  - "mailbox/outbox/2026-05-08-deferred-proof-reply.md"
-continuous-pressure-source: "mailbox/outbox/2026-05-08-deferred-proof-reply.md"
+  - "__SOURCE_REL__"
+continuous-pressure-source: "__SOURCE_REL__"
 summary: "Fixture completed continuous pressure challenge."
 ---
 
 # Existing Continuous Pressure
 
-continuous-pressure-source: mailbox/outbox/2026-05-08-deferred-proof-reply.md
+continuous-pressure-source: __SOURCE_REL__
 DONE
+  sed -i.bak "s#__SOURCE_REL__#${source_rel}#g" "${sandbox}/mailbox/done/2026-05-08-existing-continuous-pressure.md"
+  rm -f "${sandbox}/mailbox/done/2026-05-08-existing-continuous-pressure.md.bak"
 
   git -C "$sandbox" add --all -- .
   git -C "$sandbox" commit -q -m "fixture: existing continuous pressure marker"
@@ -241,6 +288,30 @@ check_seeds_from_recent_run_debt() {
   log "seeds from recent run-linked proof debt"
 }
 
+check_seeds_from_recent_explicit_feedback_refusal() {
+  local sandbox log_file challenge
+  sandbox="${WORK_DIR}/explicit-feedback-refusal"
+  log_file="${WORK_DIR}/explicit-feedback-refusal.log"
+  prepare_sandbox "$sandbox"
+  commit_explicit_feedback_refusal_outbox "$sandbox"
+
+  run_seed "$sandbox" "$log_file"
+
+  [ "$(challenge_count "$sandbox")" = "1" ] || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "expected one continuous pressure inbox for explicit feedback refusal"
+  }
+  rg -q 'seeded continuous pressure challenge:' "$log_file" || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "explicit feedback refusal did not log continuous pressure seeding"
+  }
+  challenge="$(find "$sandbox/mailbox/inbox" -maxdepth 1 -type f -name '*continuous-supervisor-pressure.md' | sort | head -1)"
+  rg -q 'continuous-pressure-source: "mailbox/outbox/2026-05-08-explicit-feedback-refusal-reply.md"' "$challenge" || fail "generated explicit-feedback challenge omitted source frontmatter"
+  rg -q 'Explicit feedback ratchet remains open despite local refusal:' "$challenge" || fail "generated explicit-feedback challenge omitted ratchet requirement"
+
+  log "seeds from recent explicit-feedback local refusal"
+}
+
 check_skips_when_source_already_challenged() {
   local sandbox log_file
   sandbox="${WORK_DIR}/already-challenged"
@@ -261,6 +332,28 @@ check_skips_when_source_already_challenged() {
   }
 
   log "does not reseed the same continuous pressure source"
+}
+
+check_skips_explicit_feedback_refusal_already_challenged() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/explicit-feedback-already-challenged"
+  log_file="${WORK_DIR}/explicit-feedback-already-challenged.log"
+  prepare_sandbox "$sandbox"
+  commit_explicit_feedback_refusal_outbox "$sandbox"
+  commit_existing_continuous_marker "$sandbox" "mailbox/outbox/2026-05-08-explicit-feedback-refusal-reply.md"
+
+  run_seed "$sandbox" "$log_file"
+
+  [ "$(challenge_count "$sandbox")" = "0" ] || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "already-challenged explicit feedback source should not seed another inbox"
+  }
+  rg -q 'continuous pressure challenge skipped: all proof-debt sources already challenged' "$log_file" || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "already-challenged explicit feedback case did not explain skip"
+  }
+
+  log "does not reseed the same explicit-feedback source"
 }
 
 check_skips_clean_stop_condition() {
@@ -309,7 +402,9 @@ main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
   check_seeds_from_recent_run_debt
+  check_seeds_from_recent_explicit_feedback_refusal
   check_skips_when_source_already_challenged
+  check_skips_explicit_feedback_refusal_already_challenged
   check_skips_clean_stop_condition
   check_skips_non_run_debt
   log "ok"

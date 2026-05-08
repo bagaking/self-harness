@@ -36,6 +36,7 @@ DEFAULT_CONTINUOUS_PRESSURE_LIMIT=3
 DEFAULT_STOP_PROOF_RUN_LIMIT=5
 DEFAULT_STOP_PROOF_EVIDENCE_LIMIT=3
 NEXT_PRESSURE_MARKER_PATTERN='^Next supervisor pressure:[[:space:]]*.'
+NO_NEXT_PRESSURE_MARKER_PATTERN='^No next supervisor pressure:[[:space:]]*.'
 STATUS_NOTIFY_DEDUP_FILE="${RUN_DIR}/supervisor-notify-last-key"
 
 SUPERVISOR_STABLE_COPY_ACTIVE=0
@@ -560,6 +561,11 @@ outbox_has_continuous_pressure_debt() {
   local file="${ROOT_DIR}/${rel}"
   [ -f "$file" ] || return 1
 
+  if LC_ALL=C rg -qi -- '(explicit-feedback|Human/supervisor feedback|Human feedback|Supervisor feedback|fresh feedback|feedback ratchet)' "$file" &&
+     LC_ALL=C rg -q -- "$NO_NEXT_PRESSURE_MARKER_PATTERN" "$file"; then
+    return 0
+  fi
+
   LC_ALL=C rg -qi -- 'return-to-main judgment:[[:space:]]*(defer|deferred|blocked|no v[0-9]* promotion)|v[0-9]+ .*blocked|v[0-9]+ .*supersession|post-commit.*proof|checked-out.*proof|main-targeted patch|candidate gene paths|promotion.*blocked' "$file" || return 1
 
   LC_ALL=C rg -q -- "$NEXT_PRESSURE_MARKER_PATTERN" "$file"
@@ -665,7 +671,7 @@ seed_continuous_pressure_challenge_if_needed() {
     branch="$(current_branch)"
     id="$(date -u +"%Y-%m-%d-%H%M%S-continuous-supervisor-pressure")"
     date_value="$(date -u +"%Y-%m-%d")"
-    requirement="$(extract_next_pressure_requirement "$source_rel")"
+    requirement="$(extract_continuous_pressure_requirement "$source_rel")"
     [ -n "$requirement" ] || continue
     write_continuous_pressure_challenge "$id" "$branch" "$date_value" "$source_rel" "$requirement"
     log "seeded continuous pressure challenge: mailbox/inbox/${id}.md from ${source_rel}"
@@ -1175,6 +1181,29 @@ extract_next_pressure_requirement() {
       sub(/^[[:space:]]+/, "", value)
       sub(/[[:space:]]+$/, "", value)
       print value
+      exit
+    }
+  ' "${ROOT_DIR}/${rel}"
+}
+
+extract_continuous_pressure_requirement() {
+  local rel="$1"
+  local value
+
+  value="$(extract_next_pressure_requirement "$rel")"
+  if [ -n "$value" ]; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+
+  awk '
+    /^No next supervisor pressure:[[:space:]]*/ {
+      value = $0
+      sub(/^No next supervisor pressure:[[:space:]]*/, "", value)
+      gsub(/[[:space:]]+/, " ", value)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      print "Explicit feedback ratchet remains open despite local refusal: " value
       exit
     }
   ' "${ROOT_DIR}/${rel}"
