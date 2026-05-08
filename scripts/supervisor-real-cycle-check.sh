@@ -234,6 +234,13 @@ related: []
 
 Reviewed one controlled sandbox run and its changed mailbox output.
 
+\`\`\`text
+scripts/query-docs.sh skills "run-linked"
+===== skills/branch-evolution-evaluation/SKILL.md =====
+\`\`\`
+
+Acceptance-criteria ordering justification: this controlled fixture uses generated sandbox commits and outbox records, not the branch's latest run-linked report sample, because its acceptance criteria are to prove post-run pressure seeding and checked-out commit report evidence inside the sandbox.
+
 ## Current Weakness
 
 The exact current weakness is that a completed feedback-bearing run can declare a narrower task and still leave no pending inbox for the next launch.
@@ -313,6 +320,17 @@ assert_clean_worktree() {
     printf '%s\n' "$status" >&2
     fail "$(basename "$sandbox"): expected a clean worktree"
   }
+}
+
+assert_commit_gate_report_has_portable_content_ok() {
+  local sandbox="$1"
+  local report="${sandbox}/.self-harness/tmp/commit-gate-last-report.md"
+
+  [ -f "$report" ] || fail "$(basename "$sandbox"): missing commit gate report"
+  if ! rg -q '^portable-content-check: ok$' "$report"; then
+    sed -n '1,220p' "$report" >&2
+    fail "$(basename "$sandbox"): checked-out commit gate report did not include portable-content-check: ok"
+  fi
 }
 
 check_valid_loop_commits_and_exits() {
@@ -453,6 +471,7 @@ check_post_run_pressure_seeding() {
   }
   seeded_count="$(find "$sandbox/mailbox/inbox" -maxdepth 1 -type f -name '*post-run-pressure-challenge.md' | wc -l | tr -d '[:space:]')"
   [ "$seeded_count" = "1" ] || fail "expected one committed post-run pressure inbox, found ${seeded_count}"
+  assert_commit_gate_report_has_portable_content_ok "$sandbox"
   seeded_file="$(find "$sandbox/mailbox/inbox" -maxdepth 1 -type f -name '*post-run-pressure-challenge.md' | sort | head -1)"
   rg -q 'mailbox/outbox/pressure-real-cycle-reply\.md' "$seeded_file" || fail "post-run pressure inbox omitted source outbox path"
   rg -q 'Review `mailbox/outbox/pressure-real-cycle-reply\.md` before broad repository inspection\.' "$seeded_file" || fail "post-run pressure inbox omitted review source path"
@@ -473,7 +492,7 @@ check_post_run_pressure_seeding() {
   git -C "$sandbox" show --name-only --format= HEAD | rg -q '^mailbox/inbox/.*post-run-pressure-challenge\.md$' || fail "post-run pressure inbox was not included in the supervisor commit"
   assert_clean_worktree "$sandbox"
 
-  log "post-run pressure marker preserved a complete long requirement in the committed next inbox"
+  log "post-run pressure marker preserved a complete long requirement and checked-out portable-content gate evidence"
 }
 
 main() {
