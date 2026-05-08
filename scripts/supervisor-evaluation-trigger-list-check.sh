@@ -956,6 +956,217 @@ OUTBOX
   log "surfaces trigger-review concrete outbox Markdown artifact evidence"
 }
 
+check_ignores_directory_prefix_trigger_prose_mentions() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/directory-prefix-prose"
+  log_file="${WORK_DIR}/directory-prefix-prose.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-directory-prefix-trigger.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-directory-prefix-trigger"
+title: "Directory Prefix Trigger"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "directory-prefix-trigger"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture trigger using a directory-prefix term."
+related: []
+---
+
+# Directory Prefix Trigger
+
+No next supervisor pressure: further escalation would be noisy because only actual skills changes should reopen this source.
+
+Supervisor evaluation trigger: reopen pressure if later durable evidence shows `skills/` changed without the required proof fields.
+
+Stop condition: if later records only mention skill paths as prose, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: directory prefix trigger"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-later-prose.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-prose"
+title: "Later Prose"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-prose"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later prose mentioning a skill path."
+related: []
+---
+
+# Later Prose
+
+This report mentions `skills/example/SKILL.md`, but it did not change a file under `skills/`.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "directory-prefix trigger should ignore prose-only skill path mentions"
+  }
+  log "ignores directory-prefix trigger prose mentions"
+}
+
+check_surfaces_directory_prefix_changed_path() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/directory-prefix-path"
+  log_file="${WORK_DIR}/directory-prefix-path.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-directory-prefix-trigger.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-directory-prefix-trigger"
+title: "Directory Prefix Trigger"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "directory-prefix-trigger"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture trigger using a directory-prefix term."
+related: []
+---
+
+# Directory Prefix Trigger
+
+No next supervisor pressure: further escalation would be noisy because actual skills changes should reopen this source.
+
+Supervisor evaluation trigger: reopen pressure if later durable evidence shows `skills/` changed without the required proof fields.
+
+Stop condition: if no skills path changes, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: directory prefix trigger"
+
+  mkdir -p "${sandbox}/skills/example"
+  cat >"${sandbox}/skills/example/SKILL.md" <<'SKILL'
+---
+name: example
+description: Fixture skill change.
+---
+
+# Example
+
+Fixture skill change.
+SKILL
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'status: review-evidence' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "directory-prefix changed path should create review evidence"
+  }
+  rg -q 'skills/example/SKILL.md' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "directory-prefix changed path evidence should be named"
+  }
+  log "surfaces directory-prefix changed paths"
+}
+
+check_ignores_supervisor_trigger_review_meta_prose() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/supervisor-trigger-review-meta"
+  log_file="${WORK_DIR}/supervisor-trigger-review-meta.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-supervisor-script-trigger.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-supervisor-script-trigger"
+title: "Supervisor Script Trigger"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "supervisor-script-trigger"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture trigger using the supervisor script path."
+related: []
+---
+
+# Supervisor Script Trigger
+
+No next supervisor pressure: further escalation would be noisy because the supervisor script did not change.
+
+Supervisor evaluation trigger: reopen pressure if later durable evidence shows a change to `scripts/supervisor.sh`.
+
+Stop condition: if later records only cite trigger-review command or content-match meta prose, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: supervisor script trigger"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-later-meta.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-meta"
+title: "Later Meta"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-meta"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later meta prose about trigger-review matching."
+related: []
+---
+
+# Later Meta
+
+The `scripts/supervisor.sh` content matches are ignored when the line is only trigger-review command citation prose.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "supervisor trigger-review meta prose should not create review evidence"
+  }
+  log "ignores supervisor trigger-review meta prose"
+}
+
 main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
@@ -973,6 +1184,9 @@ main() {
   check_ignores_trigger_review_repeated_source_path_prose_wording
   check_ignores_trigger_review_fixture_command_citation
   check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms
+  check_ignores_directory_prefix_trigger_prose_mentions
+  check_surfaces_directory_prefix_changed_path
+  check_ignores_supervisor_trigger_review_meta_prose
   log "ok"
 }
 

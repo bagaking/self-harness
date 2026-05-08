@@ -250,6 +250,62 @@ file_added_after_source() {
   return 0
 }
 
+needle_matches_changed_path() {
+  local rel="$1"
+  local needle="$2"
+
+  case "$needle" in
+    */)
+      case "$rel" in
+        "$needle"*) return 0 ;;
+      esac
+      ;;
+  esac
+
+  return 1
+}
+
+content_stream_contains_needle() {
+  local needle="$1"
+
+  awk -v needle="$needle" '
+    BEGIN {
+      lower_needle = tolower(needle)
+      found = 0
+    }
+    function should_ignore_content_match(lower_line) {
+      if (lower_needle ~ /\/$/) {
+        return 1
+      }
+      if (lower_needle == "scripts/supervisor.sh" &&
+          lower_line ~ /scripts\/supervisor\.sh[[:space:]]+triggers/ &&
+          lower_line ~ /--status[[:space:]]+review/) {
+        return 1
+      }
+      if (lower_needle == "scripts/supervisor.sh" &&
+          lower_line ~ /(command citation|content match|content matches|trigger-review command|trigger review command)/) {
+        return 1
+      }
+      return 0
+    }
+    {
+      if (found) {
+        next
+      }
+      lower_line = tolower($0)
+      if (index(lower_line, lower_needle) > 0) {
+        if (should_ignore_content_match(lower_line)) {
+          next
+        }
+        found = 1
+      }
+    }
+    END {
+      exit(found ? 0 : 1)
+    }
+  '
+}
+
 added_content_contains() {
   local rel="$1"
   local needle="$2"
@@ -261,7 +317,7 @@ added_content_contains() {
     fi
     git -C "$ROOT_DIR" diff --no-ext-diff --unified=0 -- "$rel" 2>/dev/null || true
     git -C "$ROOT_DIR" diff --cached --no-ext-diff --unified=0 -- "$rel" 2>/dev/null || true
-  } | awk '/^\+/ && $0 !~ /^\+\+\+ / { print substr($0, 2) }' | LC_ALL=C rg -Fqi -- "$needle"
+  } | awk '/^\+/ && $0 !~ /^\+\+\+ / { print substr($0, 2) }' | content_stream_contains_needle "$needle"
 }
 
 path_or_file_contains() {
@@ -269,6 +325,10 @@ path_or_file_contains() {
   local needle="$2"
   local source_commit="$3"
   [ -n "$needle" ] || return 1
+
+  if needle_matches_changed_path "$rel" "$needle"; then
+    return 0
+  fi
 
   if printf '%s\n' "$rel" | LC_ALL=C rg -Fqi -- "$needle"; then
     if file_added_after_source "$rel" "$source_commit" ||
@@ -278,7 +338,7 @@ path_or_file_contains() {
   fi
 
   if ! git -C "$ROOT_DIR" ls-files --error-unmatch "$rel" >/dev/null 2>&1; then
-    LC_ALL=C rg -Fqi -- "$needle" "${ROOT_DIR}/${rel}"
+    content_stream_contains_needle "$needle" <"${ROOT_DIR}/${rel}"
     return $?
   fi
 
