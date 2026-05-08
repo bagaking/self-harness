@@ -805,6 +805,80 @@ OUTBOX
   log "ignores trigger-review repeated source-path prose wording"
 }
 
+check_ignores_trigger_review_fixture_command_citation() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-fixture-command-citation"
+  log_file="${WORK_DIR}/trigger-review-fixture-command-citation.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-trigger-review-outbox-artifact.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-trigger-review-outbox-artifact"
+title: "Trigger Review Outbox Artifact"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "trigger-review-outbox-artifact"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal using a fixture-check command citation."
+related: []
+---
+
+# Trigger Review Outbox Artifact
+
+No next supervisor pressure: further escalation would be noisy because the source-path recursion is already covered.
+
+Supervisor evaluation trigger: after this repair is committed, run `scripts/supervisor.sh triggers --status review --limit 12 --evidence-limit 3` and `scripts/supervisor-evaluation-trigger-list-check.sh`; reopen only if `mailbox/outbox/2026-05-08-trigger-review-source-path-meta-reply.md` returns as review evidence from repeated source-path prose or the concrete outbox Markdown artifact fixture fails.
+
+Stop condition: if only the fixture validation command is cited as passing proof, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: trigger review fixture command citation"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-later-proof.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-proof"
+title: "Later Proof"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-proof"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later report that cites only the validation command as passing proof."
+related: []
+---
+
+# Later Proof
+
+Verification reran `scripts/supervisor-evaluation-trigger-list-check.sh` and the fixture suite passed. It does not report a concrete outbox Markdown artifact failure.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "fixture validation command citation should not create trigger-review evidence"
+  }
+  log "ignores trigger-review fixture validation command citations"
+}
+
 check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms() {
   local sandbox log_file
   sandbox="${WORK_DIR}/trigger-review-concrete-outbox-markdown-artifact"
@@ -897,6 +971,7 @@ main() {
   check_ignores_trigger_review_repeated_source_path_current_wording
   check_surfaces_trigger_review_concrete_artifact_terms
   check_ignores_trigger_review_repeated_source_path_prose_wording
+  check_ignores_trigger_review_fixture_command_citation
   check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms
   log "ok"
 }

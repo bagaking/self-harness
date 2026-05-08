@@ -210,6 +210,11 @@ write_trigger_needles() {
           lower_value ~ /--status[[:space:]]+review/) {
         return 1
       }
+      if (lower_value == "scripts/supervisor-evaluation-trigger-list-check.sh" &&
+          trigger_review_meta &&
+          lower_text ~ /fixture[^.]{0,80}fail/) {
+        return 1
+      }
       if (is_trigger_review_meta_needle(lower_value, lower_prefix)) {
         return 1
       }
