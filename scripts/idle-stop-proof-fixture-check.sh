@@ -220,9 +220,14 @@ check_failed_stop_proof_seeds_challenge() {
   [ -n "$challenge" ] || fail "missing idle-stop-proof-failure challenge file"
   rg -q 'stop-proof-log: "\.self-harness/tmp/idle-stop-proof-' "$challenge" || fail "challenge omitted proof log frontmatter"
   rg -q 'scripts/branch-stop-condition-check.sh' "$challenge" || fail "challenge omitted stop check command"
+  rg -q '^## Stop Proof Failure Excerpt$' "$challenge" || fail "challenge omitted durable proof failure excerpt"
+  rg -q 'claims main readiness' "$challenge" || fail "challenge excerpt omitted unsafe main-readiness signal"
+  if rg -n '(^|[[:space:]("`])/(Users|home|private|var|Volumes|tmp)/' "$challenge"; then
+    fail "challenge excerpt leaked absolute or machine-specific path"
+  fi
   rg -q 'claims main readiness' "$sandbox/.self-harness/tmp"/idle-stop-proof-*.log || fail "proof log omitted unsafe main-readiness signal"
 
-  log "seeds defect-specific challenge when stop proof fails"
+  log "seeds self-contained defect-specific challenge when stop proof fails"
 }
 
 main() {

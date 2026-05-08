@@ -16,12 +16,13 @@ related:
   - "mailbox-inbox-2026-05-08-043405-stop-condition-evaluation-challenge"
   - "mailbox-inbox-2026-05-08-045418-stop-condition-lifecycle-proof-challenge"
   - "mailbox-inbox-2026-05-08-051115-feedback-pressure-challenge"
+  - "mailbox-inbox-2026-05-08-053945-feedback-pressure-challenge"
   - "scripts/branch-stop-condition-check.sh"
   - "scripts/branch-stop-condition-fixture-check.sh"
   - "scripts/idle-stop-proof-fixture-check.sh"
   - "scripts/supervisor.sh"
   - "skills/branch-evolution-evaluation/SKILL.md"
-source: "mailbox/done/2026-05-08-051115-feedback-pressure-challenge.md"
+source: "mailbox/done/2026-05-08-053945-feedback-pressure-challenge.md"
 confidence: "high"
 ---
 
@@ -53,4 +54,4 @@ The supervisor idle skip path must run this stop proof immediately before skippi
 scripts/idle-stop-proof-fixture-check.sh
 ```
 
-It proves that a clean idle branch records stop proof before skip, and that a failed stop proof seeds a defect-specific inbox with a `stop-proof-log:` pointer under `.self-harness/tmp/`.
+It proves that a clean idle branch records stop proof before skip without durable churn, and that a failed stop proof seeds a defect-specific inbox with both a `stop-proof-log:` pointer under `.self-harness/tmp/` and a bounded sanitized failure excerpt. The durable failure challenge must contain the concrete stop signal, such as `claims main readiness`, so later agents can understand the failure after private runtime logs are deleted or the repository is migrated.

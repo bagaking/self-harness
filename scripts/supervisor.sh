@@ -768,6 +768,7 @@ write_stop_proof_failure_challenge() {
   local branch="$2"
   local date_value="$3"
   local proof_log_rel="$4"
+  local proof_excerpt="$5"
   local file="${ROOT_DIR}/mailbox/inbox/${id}.md"
 
   cat >"$file" <<EOF
@@ -800,6 +801,14 @@ The supervisor generated this because no pending inbox remained after challenge 
 
 stop-proof-log: ${proof_log_rel}
 
+## Stop Proof Failure Excerpt
+
+This bounded excerpt is copied from the failed stop proof and sanitized for durable mailbox review. Future agents must be able to identify the concrete failure signal from this challenge even if ignored runtime logs under \`.self-harness/tmp/\` are gone.
+
+\`\`\`text
+${proof_excerpt}
+\`\`\`
+
 ## Task
 
 Use the failed stop proof to raise the bar without creating generic churn.
@@ -812,17 +821,108 @@ Use the failed stop proof to raise the bar without creating generic churn.
 EOF
 }
 
+stop_proof_failure_excerpt() {
+  local proof_log="$1"
+  local line_limit=40
+  local char_limit=240
+
+  if [ ! -s "$proof_log" ]; then
+    printf '%s\n' "branch-stop-condition-check failed without non-empty output."
+    return 0
+  fi
+
+  LC_ALL=C awk \
+    -v root="$ROOT_DIR" \
+    -v home="${HOME:-}" \
+    -v line_limit="$line_limit" \
+    -v char_limit="$char_limit" '
+      function replace_all(s, old, new_value,    idx, out) {
+        if (old == "") {
+          return s
+        }
+        out = ""
+        while ((idx = index(s, old)) > 0) {
+          out = out substr(s, 1, idx - 1) new_value
+          s = substr(s, idx + length(old))
+        }
+        return out s
+      }
+      function left_delim(s, i,    ch) {
+        if (i == 1) {
+          return 1
+        }
+        ch = substr(s, i - 1, 1)
+        return ch ~ /[[:space:]"(=]/ || ch == "\047"
+      }
+      function right_delim(ch) {
+        return ch == "" || ch ~ /[[:space:]"`)>]/ || ch == "\047"
+      }
+      function redact_absolute_paths(s,    i, j, ch, out) {
+        out = ""
+        i = 1
+        while (i <= length(s)) {
+          ch = substr(s, i, 1)
+          if (ch == "/" && left_delim(s, i)) {
+            j = i + 1
+            while (j <= length(s) && !right_delim(substr(s, j, 1))) {
+              j++
+            }
+            out = out "[absolute-path-redacted]"
+            i = j
+          } else {
+            out = out ch
+            i++
+          }
+        }
+        return out
+      }
+      {
+        line = $0
+        line = replace_all(line, root "/", "")
+        line = replace_all(line, root, ".")
+        if (home != "") {
+          line = replace_all(line, home "/", "[home-redacted]/")
+          line = replace_all(line, home, "[home-redacted]")
+        }
+        line = redact_absolute_paths(line)
+        gsub(/[[:cntrl:]]/, "?", line)
+        if (length(line) > char_limit) {
+          line = substr(line, 1, char_limit) "... [truncated]"
+        }
+        if (line ~ /[^[:space:]]/) {
+          lines[++n] = line
+        }
+      }
+      END {
+        if (n == 0) {
+          print "branch-stop-condition-check failed without non-empty output."
+          exit
+        }
+        start = 1
+        if (n > line_limit) {
+          start = n - line_limit + 1
+          print "[excerpt starts after " start - 1 " earlier non-empty lines]"
+        }
+        for (i = start; i <= n; i++) {
+          print lines[i]
+        }
+      }
+    ' "$proof_log"
+}
+
 seed_stop_proof_failure_challenge() {
-  local proof_log_rel="$1"
+  local proof_log="$1"
+  local proof_log_rel="$2"
   [ "$AUTO_CHALLENGE" = "1" ] || return 0
   is_agent_branch || return 0
   has_pending_inbox && return 0
 
-  local branch id date_value
+  local branch id date_value proof_excerpt
   branch="$(current_branch)"
   id="$(date -u +"%Y-%m-%d-%H%M%S-idle-stop-proof-failure")"
   date_value="$(date -u +"%Y-%m-%d")"
-  write_stop_proof_failure_challenge "$id" "$branch" "$date_value" "$proof_log_rel"
+  proof_excerpt="$(stop_proof_failure_excerpt "$proof_log")"
+  write_stop_proof_failure_challenge "$id" "$branch" "$date_value" "$proof_log_rel" "$proof_excerpt"
   log "seeded idle stop proof failure challenge: mailbox/inbox/${id}.md from ${proof_log_rel}"
 }
 
@@ -861,7 +961,7 @@ prove_idle_stop_condition_or_seed_challenge() {
   fi
 
   log "idle stop proof failed: ${proof_log_rel}"
-  seed_stop_proof_failure_challenge "$proof_log_rel"
+  seed_stop_proof_failure_challenge "$proof_log" "$proof_log_rel"
   return 1
 }
 
