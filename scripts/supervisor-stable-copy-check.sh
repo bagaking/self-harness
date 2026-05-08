@@ -95,11 +95,65 @@ prepare_common_sandbox() {
     "${sandbox}/constitution" \
     "${sandbox}/scripts" \
     "${sandbox}/mailbox/inbox" \
+    "${sandbox}/mailbox/processing" \
+    "${sandbox}/mailbox/outbox" \
+    "${sandbox}/mailbox/done" \
+    "${sandbox}/mailbox/failed" \
     "${sandbox}/memory/diary" \
     "${sandbox}/bin"
 
   cp "${ROOT_DIR}/constitution/"*.md "${sandbox}/constitution/"
   cp "${ROOT_DIR}/scripts/"*.sh "${sandbox}/scripts/"
+}
+
+write_idle_skip_stop_safe_history() {
+  local sandbox="$1"
+
+  git -C "$sandbox" init -q
+  git -C "$sandbox" checkout -q -b agent/stable-copy-check
+  git -C "$sandbox" config user.name "Self Harness Fixture"
+  git -C "$sandbox" config user.email "self-harness-fixture@example.invalid"
+
+  {
+    printf '%s\n' '/.codex/'
+    printf '%s\n' '/.self-harness/'
+  } >"${sandbox}/.gitignore"
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: stable copy idle baseline"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-stable-copy-clean-stop-reply.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-stable-copy-clean-stop-reply"
+title: "Stable Copy Clean Stop Reply"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/stable-copy-check"
+to: "supervisor"
+message_id: "stable-copy-clean-stop-reply"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture run-linked outbox that keeps stable-copy idle skip stop-safe."
+related: []
+---
+
+# Stable Copy Clean Stop Reply
+
+Return-to-main judgment: defer. This fixture remains branch-local.
+
+No next supervisor pressure: further escalation would be noisy because this fixture only proves stable-copy idle skip can stop after the stop proof passes.
+
+Supervisor evaluation trigger: run `scripts/supervisor-stable-copy-check.sh`; reopen only if the idle-skip fixture launches Codex or stops without a passing stop proof.
+
+Stop condition: if the stable-copy idle fixture records a passing stop proof and does not invoke Codex, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "run: Stable Copy Clean Stop Reply"
 }
 
 write_frontmatter_mailbox_message() {
@@ -280,7 +334,6 @@ check_idle_once_skips_launch() {
   log_file="${WORK_DIR}/idle-once.log"
   prepare_common_sandbox "$sandbox"
   write_fail_codex "${sandbox}/bin"
-  write_fake_git "${sandbox}/bin"
   printf '%s\n' '---' >"${sandbox}/memory/diary/existing.md"
   printf '%s\n' 'id: "diary-stable-copy-check-existing"' >>"${sandbox}/memory/diary/existing.md"
   printf '%s\n' 'title: "Existing Diary"' >>"${sandbox}/memory/diary/existing.md"
@@ -293,6 +346,7 @@ check_idle_once_skips_launch() {
   printf '%s\n' 'summary: "Existing scratch diary for idle launch proof."' >>"${sandbox}/memory/diary/existing.md"
   printf '%s\n' '---' >>"${sandbox}/memory/diary/existing.md"
   printf '%s\n' '# Existing Diary' >>"${sandbox}/memory/diary/existing.md"
+  write_idle_skip_stop_safe_history "$sandbox"
 
   set +e
   (
@@ -311,7 +365,12 @@ check_idle_once_skips_launch() {
     fail "idle once returned ${status}"
   fi
 
-  if ! rg -q 'idle agent run skipped: no pending inbox after challenge seeding' "$log_file"; then
+  if ! rg -q 'idle stop proof ok: \.self-harness/tmp/idle-stop-proof-' "$log_file"; then
+    sed -n '1,160p' "$log_file" >&2
+    fail "idle once did not record a passing stop proof"
+  fi
+
+  if ! rg -q 'idle agent run skipped: stop proof ok and no pending inbox after challenge seeding' "$log_file"; then
     sed -n '1,160p' "$log_file" >&2
     fail "idle once did not report the launch skip"
   fi

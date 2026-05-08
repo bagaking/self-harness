@@ -17,12 +17,14 @@ related:
   - "mailbox-inbox-2026-05-08-045418-stop-condition-lifecycle-proof-challenge"
   - "mailbox-inbox-2026-05-08-051115-feedback-pressure-challenge"
   - "mailbox-inbox-2026-05-08-053945-feedback-pressure-challenge"
+  - "mailbox-inbox-2026-05-08-171814-feedback-pressure-challenge"
   - "scripts/branch-stop-condition-check.sh"
   - "scripts/branch-stop-condition-fixture-check.sh"
   - "scripts/idle-stop-proof-fixture-check.sh"
+  - "scripts/supervisor-stable-copy-check.sh"
   - "scripts/supervisor.sh"
   - "skills/branch-evolution-evaluation/SKILL.md"
-source: "mailbox/done/2026-05-08-053945-feedback-pressure-challenge.md"
+source: "mailbox/done/2026-05-08-171814-feedback-pressure-challenge.md"
 confidence: "high"
 ---
 
@@ -55,3 +57,9 @@ scripts/idle-stop-proof-fixture-check.sh
 ```
 
 It proves that a clean idle branch records stop proof before skip without durable churn, and that a failed stop proof seeds a defect-specific inbox with both a `stop-proof-log:` pointer under `.self-harness/tmp/` and a bounded sanitized failure excerpt. The durable failure challenge must contain the concrete stop signal, such as `claims main readiness`, so later agents can understand the failure after private runtime logs are deleted or the repository is migrated.
+
+Stable-copy idle fixtures must also satisfy this stop proof instead of bypassing it. `scripts/supervisor-stable-copy-check.sh` now gives its idle-skip sandbox a real branch-local git history, a clean `run:` outbox with a bounded stop condition, and ignored `.codex/` plus `.self-harness/` runtime state before asserting that Codex was not launched. Use this recall probe when changing the stable-copy or idle-stop path:
+
+```text
+scripts/query-docs.sh memory "stable copy stop proof"
+```
