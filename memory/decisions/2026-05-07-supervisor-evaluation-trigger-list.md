@@ -49,6 +49,8 @@ On 2026-05-08 the trigger-review pressure chain exposed a second false-positive 
 
 Later on 2026-05-08 the same chain exposed a narrower recursive false-positive. A covered trigger-review refusal can cite a backticked source outbox path in meta prose such as "`mailbox/outbox/...md` gains new later evidence"; a later bounded refusal or diary may repeat that source path while explaining why it is already covered. That path reference alone is not the changed artifact, notification path, skipped-apply case, or hygiene regression named by the trigger. The matcher now ignores `mailbox/outbox/*.md` needles only when they appear in trigger-review source-path meta sentences that also cite `scripts/supervisor.sh triggers --status review` and do not identify the outbox Markdown path itself as a concrete artifact. Concrete status-sync evidence such as patch attachment paths remains visible, and a concrete outbox Markdown artifact path can still produce `review-evidence`.
 
+The post-run continuous-pressure proof on 2026-05-08 exposed one more equivalent wording: "review evidence from repeated source-path prose." That phrase is the same trigger-review meta boundary, not a concrete artifact request. The matcher now treats it as source-path meta wording too, and `scripts/supervisor-evaluation-trigger-list-check.sh` includes a fixture where a later continuous-supervision report repeats only trigger-review source paths. This keeps trigger-review from blocking the lower-priority continuous-pressure seeder when all real trigger-review sources already have lifecycle markers.
+
 ## Why
 
 The previous feedback gate made refusals name a future trigger, but a future supervisor still had to remember to surface and evaluate those triggers. A clean mailbox plus `task_complete` could still look sufficient even when a trigger-backed refusal had later evidence.
@@ -76,6 +78,7 @@ The fixture proves these cases:
 - trigger-review source-path meta terms do not create review evidence unless a concrete changed artifact term also appears.
 - current repeated-source wording that cites `scripts/supervisor-evaluation-trigger-list.sh` as a defect target does not create review evidence by itself.
 - trigger-review concrete changed artifact terms still create review evidence.
+- repeated source-path prose wording does not create trigger-review evidence by itself.
 - trigger-review concrete outbox Markdown artifact terms still create review evidence.
 
 Live evidence on this branch: `scripts/supervisor.sh triggers --limit 5 --status review` surfaced `mailbox/outbox/2026-05-07-feedback-refusal-trigger-reply.md` and pointed to later durable evidence from this run. `scripts/supervisor.sh triggers --limit 5 --status quiet` listed this run's uncommitted trigger-source reply as `no-later-evidence`, which keeps same-run notes from masquerading as later proof before the supervisor commit exists.

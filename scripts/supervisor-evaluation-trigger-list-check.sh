@@ -731,6 +731,80 @@ OUTBOX
   log "surfaces trigger-review concrete changed artifact evidence"
 }
 
+check_ignores_trigger_review_repeated_source_path_prose_wording() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-repeated-source-path-prose-wording"
+  log_file="${WORK_DIR}/trigger-review-repeated-source-path-prose-wording.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-trigger-review-outbox-artifact.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-trigger-review-outbox-artifact"
+title: "Trigger Review Outbox Artifact"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "trigger-review-outbox-artifact"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal using repeated source-path prose wording."
+related: []
+---
+
+# Trigger Review Outbox Artifact
+
+No next supervisor pressure: further escalation would be noisy because the source-path recursion is already covered.
+
+Supervisor evaluation trigger: after this repair is committed, run `scripts/supervisor.sh triggers --status review --limit 12 --evidence-limit 3` and `scripts/supervisor-evaluation-trigger-list-check.sh`; reopen only if `mailbox/outbox/2026-05-08-trigger-review-source-path-meta-reply.md` returns as review evidence from repeated source-path prose or the concrete outbox Markdown artifact fixture fails.
+
+Stop condition: if only source-path prose repeats, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: trigger review repeated source-path prose"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-later-continuous-supervision.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-continuous-supervision"
+title: "Later Continuous Supervision"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-continuous-supervision"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later report that repeats trigger-review source paths as review context."
+related: []
+---
+
+# Later Continuous Supervision
+
+The latest outbox chain shows that `mailbox/outbox/2026-05-08-trigger-review-source-path-meta-reply.md` was handled, while `mailbox/outbox/2026-05-08-trigger-review-source-path-meta-candidate-dossier-reply.md` still named deferred promotion debt.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "repeated source-path prose wording should not create trigger-review evidence"
+  }
+  log "ignores trigger-review repeated source-path prose wording"
+}
+
 check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms() {
   local sandbox log_file
   sandbox="${WORK_DIR}/trigger-review-concrete-outbox-markdown-artifact"
@@ -822,6 +896,7 @@ main() {
   check_ignores_trigger_review_source_path_meta_terms
   check_ignores_trigger_review_repeated_source_path_current_wording
   check_surfaces_trigger_review_concrete_artifact_terms
+  check_ignores_trigger_review_repeated_source_path_prose_wording
   check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms
   log "ok"
 }

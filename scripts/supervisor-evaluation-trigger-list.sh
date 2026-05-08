@@ -218,7 +218,7 @@ write_trigger_needles() {
     {
       text = $0
       lower_text = tolower(text)
-      trigger_review_meta = (lower_text ~ /scripts\/supervisor\.sh[[:space:]]+triggers/ && lower_text ~ /(gains new later evidence|review-evidence source|trigger-review source|reappears only because[^.]*later record[^.]*repeats|listed only because[^.]*repeats|source-path meta)/)
+      trigger_review_meta = (lower_text ~ /scripts\/supervisor\.sh[[:space:]]+triggers/ && lower_text ~ /(gains new later evidence|review-evidence source|review evidence from repeated source-path prose|trigger-review source|reappears only because[^.]*later record[^.]*repeats|listed only because[^.]*repeats|source-path meta)/)
       while (match(text, /`[^`]+`/)) {
         value = substr(text, RSTART + 1, RLENGTH - 2)
         lower_value = tolower(value)
