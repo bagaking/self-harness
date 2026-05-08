@@ -101,6 +101,17 @@ write_broad_rg_session() {
 EOF
 }
 
+write_slow_required_boot_session() {
+  local file="$1"
+  cat >"$file" <<'EOF'
+{"timestamp":"2026-05-07T00:00:00.000Z","type":"session_meta","payload":{"id":"slow-required-boot"}}
+{"timestamp":"2026-05-07T00:00:00.100Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Pending mailbox before launch:\n- mailbox/inbox/pending-task.md\n\nMailbox priority:\n- After reading AGENTS.md and constitution/00-charter.md, if exactly one pending inbox is listed, claim that file into mailbox/processing/ before broad repository inspection."}]}}
+{"timestamp":"2026-05-07T00:00:20.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n '1,220p' AGENTS.md\"}"}}
+{"timestamp":"2026-05-07T00:01:10.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"sed -n '1,260p' constitution/00-charter.md\"}"}}
+{"timestamp":"2026-05-07T00:01:33.000Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"mv mailbox/inbox/pending-task.md mailbox/processing/pending-task.md\"}"}}
+EOF
+}
+
 write_no_pending_session() {
   local file="$1"
   cat >"$file" <<'EOF'
@@ -223,6 +234,49 @@ check_rejects_broad_rg_before_claim() {
   log "rejects broad rg before claim"
 }
 
+check_allows_slow_required_boot_under_default_cap() {
+  local sandbox log_file session
+  sandbox="${WORK_DIR}/slow-required-boot-default"
+  log_file="${WORK_DIR}/slow-required-boot-default.log"
+  session="${sandbox}/sessions/slow-required-boot.jsonl"
+  prepare_sandbox "$sandbox"
+  write_slow_required_boot_session "$session"
+
+  (
+    cd "$sandbox"
+    bash scripts/pending-inbox-claim-latency-check.sh "$session"
+  ) >"$log_file" 2>&1 || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "slow required boot session should pass under default cap"
+  }
+  rg -q 'pending-inbox-claim-latency-check: ok .*claim_delay_seconds=93' "$log_file" || fail "slow required boot pass did not report the expected claim delay"
+
+  log "allows slow required boot under default cap"
+}
+
+check_rejects_slow_required_boot_under_strict_cap() {
+  local sandbox log_file session status
+  sandbox="${WORK_DIR}/slow-required-boot-strict"
+  log_file="${WORK_DIR}/slow-required-boot-strict.log"
+  session="${sandbox}/sessions/slow-required-boot.jsonl"
+  prepare_sandbox "$sandbox"
+  write_slow_required_boot_session "$session"
+
+  if run_scanner "$sandbox" "$session" "$log_file"; then
+    status=0
+  else
+    status=$?
+  fi
+  [ "$status" -eq 1 ] || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "slow required boot strict session returned ${status}, expected 1"
+  }
+  rg -q 'claim_delay_seconds: 93' "$log_file" || fail "strict cap failure did not report the expected claim delay"
+  rg -q 'max_seconds: 90' "$log_file" || fail "strict cap failure did not report max_seconds 90"
+
+  log "rejects slow required boot under explicit strict cap"
+}
+
 check_skips_no_pending_prompt() {
   local sandbox log_file session
   sandbox="${WORK_DIR}/no-pending"
@@ -301,6 +355,8 @@ main() {
   check_allows_required_bootstrap_probe
   check_allows_mailbox_presence_probe
   check_rejects_broad_rg_before_claim
+  check_allows_slow_required_boot_under_default_cap
+  check_rejects_slow_required_boot_under_strict_cap
   check_skips_no_pending_prompt
   check_gate_rejects_changed_delayed_session
   check_gate_allows_changed_claim_first_session

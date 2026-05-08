@@ -586,16 +586,39 @@ has_existing_continuous_pressure_challenge_for_source() {
 
   while IFS= read -r file; do
     [ -n "$file" ] || continue
-    LC_ALL=C rg -q --fixed-strings "continuous-pressure-source: ${source_rel}" "$file" && return 0
+    file_has_continuous_pressure_source_marker "$file" "$source_rel" && return 0
   done < <(find \
     "${ROOT_DIR}/mailbox/inbox" \
     "${ROOT_DIR}/mailbox/processing" \
     "${ROOT_DIR}/mailbox/done" \
     "${ROOT_DIR}/mailbox/failed" \
-    "${ROOT_DIR}/mailbox/outbox" \
     -maxdepth 1 -type f -name '*.md' 2>/dev/null)
 
   return 1
+}
+
+file_has_continuous_pressure_source_marker() {
+  local file="$1"
+  local source_rel="$2"
+
+  awk -v source_rel="$source_rel" '
+    /^continuous-pressure-source:[[:space:]]*/ {
+      value = $0
+      sub(/^continuous-pressure-source:[[:space:]]*/, "", value)
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      if (value ~ /^".*"$/) {
+        sub(/^"/, "", value)
+        sub(/"$/, "", value)
+      }
+      if (value == source_rel) {
+        found = 1
+      }
+    }
+    END {
+      exit(found ? 0 : 1)
+    }
+  ' "$file"
 }
 
 write_continuous_pressure_challenge() {

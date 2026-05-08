@@ -12,7 +12,7 @@ tags:
   - feedback-pressure
   - continuous-supervision
   - control-plane
-summary: "Records the branch-local idle supervisor mechanism that seeds one bounded challenge from recent run-linked proof, promotion, or explicit-feedback ratchet debt."
+summary: "Records the branch-local idle supervisor mechanism that seeds one bounded challenge from recent run-linked proof, promotion, or explicit-feedback ratchet debt without treating source outbox prose as lifecycle coverage."
 source: "mailbox"
 confidence: "high"
 related:
@@ -34,6 +34,8 @@ Idle supervisor cycles should not stop merely because the inbox is clean when th
 As of the 2026-05-08 feedback-pressure ratchet repair, the same idle scan also treats recent explicit-feedback runs with a `No next supervisor pressure:` refusal as unresolved continuous-pressure sources. This closes the stop-too-early gap where a local fixture pass could end a human feedback ratchet. The generated challenge requirement starts with `Explicit feedback ratchet remains open despite local refusal:` and quotes the local refusal as the current narrow closure, not as permission for the supervisor to stop raising the bar.
 
 The generated inbox records `continuous-pressure-source: <source>` in frontmatter and body. That marker is searched across mailbox lifecycle directories so the same source cannot be reissued repeatedly.
+
+As of the 2026-05-08 outbox-prose false-positive repair, suppression is limited to actual mailbox lifecycle records under `mailbox/inbox/`, `mailbox/processing/`, `mailbox/done/`, and `mailbox/failed/`. The source `mailbox/outbox/*.md` report is intentionally excluded: a `Next supervisor pressure:` sentence that asks for a future `continuous-pressure-source: <same-source>` marker is a requirement, not proof that the lifecycle challenge already exists.
 
 ## Source Handling Clarification
 
@@ -58,6 +60,7 @@ scripts/continuous-supervisor-pressure-check.sh
 The fixture proves:
 
 - recent run-linked proof debt seeds exactly one challenge;
+- source outbox prose asking for its own future `continuous-pressure-source:` marker still seeds exactly one challenge;
 - an existing `continuous-pressure-source:` lifecycle marker suppresses repeats;
 - recent explicit-feedback local refusal seeds exactly one challenge;
 - an existing `continuous-pressure-source:` marker for that explicit-feedback source suppresses repeats;

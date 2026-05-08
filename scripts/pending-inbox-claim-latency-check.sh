@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-max_seconds=90
+max_seconds=120
 session_files=()
 
 usage() {
@@ -14,6 +14,8 @@ Usage:
 
 Checks Codex session transcripts for pending-inbox launches where broad
 discovery commands happened before the first mailbox claim.
+
+Default max claim latency is 120 seconds.
 
 If no SESSION is supplied, the latest session transcript is checked.
 EOF

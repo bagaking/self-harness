@@ -96,6 +96,42 @@ OUTBOX
   git -C "$sandbox" commit -q -m "run: Deferred Proof Reply"
 }
 
+commit_self_referential_deferred_run_outbox() {
+  local sandbox="$1"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-self-referential-deferred-proof-reply.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-self-referential-deferred-proof-reply"
+title: "Self Referential Deferred Proof Reply"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/continuous-pressure-check"
+to: "supervisor"
+message_id: "self-referential-deferred-proof-reply"
+tags:
+  - mailbox
+  - feedback-pressure
+  - return-to-main
+summary: "Fixture run whose source prose asks for its own future continuous-pressure marker."
+related: []
+---
+
+# Self Referential Deferred Proof Reply
+
+## Return-To-Main Judgment
+
+Return-to-main judgment: defer. The candidate needs checked-out proof before promotion.
+
+Next supervisor pressure: after this repair is committed, require either exactly one continuous-pressure inbox for this source, or a durable `continuous-pressure-source: mailbox/outbox/2026-05-08-self-referential-deferred-proof-reply.md` lifecycle marker.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "run: Self Referential Deferred Proof Reply"
+}
+
 commit_clean_stop_run_outbox() {
   local sandbox="$1"
 
@@ -288,6 +324,29 @@ check_seeds_from_recent_run_debt() {
   log "seeds from recent run-linked proof debt"
 }
 
+check_source_outbox_marker_request_does_not_suppress_seed() {
+  local sandbox log_file challenge
+  sandbox="${WORK_DIR}/self-referential-source"
+  log_file="${WORK_DIR}/self-referential-source.log"
+  prepare_sandbox "$sandbox"
+  commit_self_referential_deferred_run_outbox "$sandbox"
+
+  run_seed "$sandbox" "$log_file"
+
+  [ "$(challenge_count "$sandbox")" = "1" ] || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "source outbox prose must not suppress its own continuous pressure inbox"
+  }
+  rg -q 'seeded continuous pressure challenge:' "$log_file" || {
+    sed -n '1,160p' "$log_file" >&2
+    fail "self-referential source did not log continuous pressure seeding"
+  }
+  challenge="$(find "$sandbox/mailbox/inbox" -maxdepth 1 -type f -name '*continuous-supervisor-pressure.md' | sort | head -1)"
+  rg -q 'continuous-pressure-source: "mailbox/outbox/2026-05-08-self-referential-deferred-proof-reply.md"' "$challenge" || fail "generated self-referential challenge omitted source frontmatter"
+
+  log "does not treat source outbox marker request as lifecycle coverage"
+}
+
 check_seeds_from_recent_explicit_feedback_refusal() {
   local sandbox log_file challenge
   sandbox="${WORK_DIR}/explicit-feedback-refusal"
@@ -402,6 +461,7 @@ main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
   check_seeds_from_recent_run_debt
+  check_source_outbox_marker_request_does_not_suppress_seed
   check_seeds_from_recent_explicit_feedback_refusal
   check_skips_when_source_already_challenged
   check_skips_explicit_feedback_refusal_already_challenged
