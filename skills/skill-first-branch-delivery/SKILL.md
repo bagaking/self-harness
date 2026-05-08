@@ -95,4 +95,4 @@ For this repository, Darwin-style selection pressure means variation plus measur
 9. Validate before handoff.
    - Run `scripts/feedback-escalation-check.sh` for feedback-bearing work.
    - Run `scripts/docs-check.sh` before finishing.
-   - For changed skills, run `python3 skills/.system/skill-creator/scripts/quick_validate.py <skill-dir>` if the local dependencies allow it; otherwise record the blocker and manually check frontmatter and placeholder removal.
+   - For changed skills, run `python3 scripts/skill-quick-validate.py <skill-dir>`. The older `python3 skills/.system/skill-creator/scripts/quick_validate.py <skill-dir>` command is a compatibility wrapper; prefer the top-level script as the source of truth.
