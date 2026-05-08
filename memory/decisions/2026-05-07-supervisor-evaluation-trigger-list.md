@@ -21,6 +21,7 @@ related:
   - "mailbox-inbox-2026-05-07-124332-feedback-pressure-challenge"
   - "mailbox-outbox-2026-05-07-124332-trigger-evidence-precision-reply"
   - "mailbox-inbox-2026-05-08-020741-trigger-review-pressure-challenge"
+  - "mailbox-inbox-2026-05-08-024439-trigger-review-pressure-challenge"
   - "scripts/supervisor-evaluation-trigger-list.sh"
   - "scripts/supervisor-evaluation-trigger-list-check.sh"
 ---
@@ -46,6 +47,8 @@ The matcher now uses only concrete backticked trigger terms that look like comma
 
 On 2026-05-08 the trigger-review pressure chain exposed a second false-positive class. Trigger-review refusal templates backtick scaffold terms such as `trigger-review-source:`, mailbox lifecycle directories, and `scripts/supervisor.sh triggers --status review`. Those citations are instructions for evaluating pressure, not concrete proof that a prior trigger condition fired. The matcher now ignores that scaffold so a lifecycle marker or command citation alone cannot keep generating follow-up trigger-review challenges.
 
+Later on 2026-05-08 the same chain exposed a narrower recursive false-positive. A covered trigger-review refusal can cite a backticked source outbox path in meta prose such as "`mailbox/outbox/...md` gains new later evidence"; a later bounded refusal or diary may repeat that source path while explaining why it is already covered. That path reference alone is not the changed artifact, notification path, skipped-apply case, or hygiene regression named by the trigger. The matcher now ignores `mailbox/outbox/*.md` needles only when they appear in trigger-review meta sentences that also cite `scripts/supervisor.sh triggers --status review` and describe gaining review evidence. Concrete status-sync evidence such as patch attachment paths remains visible.
+
 ## Why
 
 The previous feedback gate made refusals name a future trigger, but a future supervisor still had to remember to surface and evaluate those triggers. A clean mailbox plus `task_complete` could still look sufficient even when a trigger-backed refusal had later evidence.
@@ -70,6 +73,7 @@ The fixture proves these cases:
 - generic prose words from the completed-record trigger do not create review evidence;
 - old matching terms in an existing file do not count after an unrelated later edit.
 - trigger-review scaffold-only lifecycle evidence does not create review evidence.
+- trigger-review source-path meta terms do not create review evidence unless a concrete changed artifact term also appears.
 
 Live evidence on this branch: `scripts/supervisor.sh triggers --limit 5 --status review` surfaced `mailbox/outbox/2026-05-07-feedback-refusal-trigger-reply.md` and pointed to later durable evidence from this run. `scripts/supervisor.sh triggers --limit 5 --status quiet` listed this run's uncommitted trigger-source reply as `no-later-evidence`, which keeps same-run notes from masquerading as later proof before the supervisor commit exists.
 

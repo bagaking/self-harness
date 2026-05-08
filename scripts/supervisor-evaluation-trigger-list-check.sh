@@ -501,6 +501,80 @@ DONE
   log "ignores trigger-review scaffold-only lifecycle evidence"
 }
 
+check_ignores_trigger_review_source_path_meta_terms() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-source-path-meta"
+  log_file="${WORK_DIR}/trigger-review-source-path-meta.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-trigger-review-covered-refusal.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-trigger-review-covered-refusal"
+title: "Trigger Review Covered Refusal"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "trigger-review-covered-refusal"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal with source-path meta trigger terms."
+related: []
+---
+
+# Trigger Review Covered Refusal
+
+No next supervisor pressure: further trigger-review escalation for the source would be noisy because the concrete evidence is already covered.
+
+Supervisor evaluation trigger: run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3`; if `mailbox/outbox/2026-05-08-status-sync-v3-proof-reply.md` gains new later evidence from a changed status-sync artifact, issue one defect-specific challenge.
+
+Stop condition: if the source remains listed only with the same later evidence, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: trigger review covered refusal"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-later-covered-refusal.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-covered-refusal"
+title: "Later Covered Refusal"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-covered-refusal"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later refusal that names only the covered source path."
+related: []
+---
+
+# Later Covered Refusal
+
+The older covered refusal remains tied to `mailbox/outbox/2026-05-08-status-sync-v3-proof-reply.md`, but this later record does not describe a changed status-sync artifact.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "trigger-review source path meta terms should not create review evidence"
+  }
+  log "ignores trigger-review source path meta terms without changed-artifact evidence"
+}
+
 main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
@@ -512,6 +586,7 @@ main() {
   check_ignores_generic_words_from_completed_record_trigger
   check_existing_file_old_term_does_not_count_after_unrelated_edit
   check_ignores_trigger_review_scaffold_only_terms
+  check_ignores_trigger_review_source_path_meta_terms
   log "ok"
 }
 

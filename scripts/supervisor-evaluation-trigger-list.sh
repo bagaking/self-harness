@@ -184,10 +184,16 @@ write_trigger_needles() {
           lower_value ~ /--status[[:space:]]+review/) {
         return 1
       }
+      if (trigger_review_meta &&
+          lower_value ~ /^mailbox\/outbox\/[^[:space:]]+\.md$/) {
+        return 1
+      }
       return 0
     }
     {
       text = $0
+      lower_text = tolower(text)
+      trigger_review_meta = (lower_text ~ /scripts\/supervisor\.sh[[:space:]]+triggers/ && lower_text ~ /(gains new later evidence|review-evidence source|trigger-review source)/)
       while (match(text, /`[^`]+`/)) {
         value = substr(text, RSTART + 1, RLENGTH - 2)
         lower_value = tolower(value)
