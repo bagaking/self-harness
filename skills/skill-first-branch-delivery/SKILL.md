@@ -36,6 +36,11 @@ Recall phrases: skill-first branch delivery; skill first branch delivery.
    - Rejection: explicitly leave branch-local, noisy, private, lineage-specific, or unproved material out of `main`.
    - Freshness: record supersession or deferral when newer evidence corrects an older candidate.
 
+5. Triage live trigger-review pressure before adding mechanisms. Recall phrases: trigger-review triage; trigger review triage; live trigger review pressure.
+   - Run the requested trigger-review command when a mailbox challenge names it, usually `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3`.
+   - For each listed `review-evidence` source, classify it as stale, already covered, or mechanism-worthy. Stale means the source no longer appears or its trigger condition is false; already covered means later durable records satisfy the trigger and name a lifecycle/source marker; mechanism-worthy means the evidence exposes a repeatable false positive, missing gate, missing skill step, or changed control-plane surface.
+   - Do not silence trigger output by adding broad ignore rules or generic outbox prose. Retain a script, skill, memory decision, or bounded refusal only when the classification has rerunnable proof.
+
 ## Research-Backed Skill Evolution Loop
 
 Use this smallest loop when the artifact under consideration is a skill or skill update:
@@ -60,7 +65,7 @@ For this repository, Darwin-style selection pressure means variation plus measur
 - Rejection: material left out because it is one-off, noisy, private, local to one lineage, unvalidated, or better suited to memory/proposal/outbox.
 - Freshness: explicit relationship to older evidence, including superseded rules, deferrals, source dates, or conditions that should trigger reevaluation.
 
-5. Use this feature-based report template for future `main` evolution reports:
+6. Use this feature-based report template for future `main` evolution reports:
 
 ```markdown
 ## Feature: <name>
@@ -73,18 +78,21 @@ For this repository, Darwin-style selection pressure means variation plus measur
 - Return-to-main judgment: <candidate | deferred | rejected>
 ```
 
-6. For notification or status-sync proposals, separate policy from delivery.
+7. For notification or status-sync proposals, separate policy from delivery.
    - Local logging: allowed under `.self-harness/`; never commit runtime logs.
    - Optional Lark delivery: opt in only through environment/configuration; never commit recipient ids, tokens, or local device details.
    - Anti-spam: notify only on lifecycle start/resume, terminal stop/pause/failure, post-run commit failure, or significant committed progress; deduplicate repeated running events; do not notify for every file edit, broad sweep, or already-covered proof loop.
+   - Message content: include event, status, branch, concise reason, optional bounded detail, UTC time, and supervisor signature. Exclude secrets, recipient identifiers, raw logs, local paths, hostnames, usernames, and large transcripts.
+   - Failure policy: notification send failure must be logged but must not block commits or normal supervisor progress after local status recording succeeds. Recall phrase: notification failure blocks commits. Only malformed notification configuration or changed notification code should create a repair challenge.
+   - Audit: durable reports should cite the relevant script, fixture, or `.self-harness/` log location generically; runtime notification attempts stay under `.self-harness/` and are never promoted to repository state.
    - Main proof: require fake-delivery fixtures, environment-isolation proof, shell syntax checks, docs checks, and a clean `origin/main` patch or checked-out supervisor cycle when supervisor hooks change.
 
-7. Decide whether a branch output is skill-worthy.
+8. Decide whether a branch output is skill-worthy.
    - Promote to a skill only when it is likely to recur, can fit in a compact `SKILL.md`, is discoverable by likely trigger terms, and reduces future context or decision cost.
    - Require at least one local use, query recall proof, and named validation or acceptance evidence.
    - Default to a proposal or mailbox report when the behavior is one-off, too broad, unproved, or tied to no0-only history.
 
-8. Validate before handoff.
+9. Validate before handoff.
    - Run `scripts/feedback-escalation-check.sh` for feedback-bearing work.
    - Run `scripts/docs-check.sh` before finishing.
    - For changed skills, run `python3 skills/.system/skill-creator/scripts/quick_validate.py <skill-dir>` if the local dependencies allow it; otherwise record the blocker and manually check frontmatter and placeholder removal.
