@@ -48,6 +48,8 @@ Use this smallest loop when the artifact under consideration is a skill or skill
 6. Rejection: state what was deliberately not retained, such as broad essays, private scratch notes, branch identity, raw external clones, unvalidated rewrites, or changes that would create noisy self-modification.
 7. Freshness: record whether the change supersedes, narrows, or merely adds evidence to older memory or skills. Prefer a new memory decision over rewriting completed mailbox or diary evidence.
 
+When a branch-delivery task changes `skills/`, the outbox must name the candidate skill variation, one rejected non-skill alternative, the pre-edit fitness signal, and the post-edit command or later-use evidence proving the skill improved. If those fields cannot be produced, write a focused refusal with the smaller useful next task instead of making a speculative skill edit.
+
 For this repository, Darwin-style selection pressure means variation plus measured retention, not uncontrolled self-editing. External evolutionary-agent patterns are only useful when they can be reduced to local proof: an isolated candidate, a runnable or queryable fitness check, and a durable keep/reject decision.
 
 ## Skill Evolution Terms
