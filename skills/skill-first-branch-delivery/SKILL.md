@@ -14,11 +14,12 @@ Recall phrases: skill-first branch delivery; skill first branch delivery.
 1. State the focused question.
    - Use the auto-research shape: focused question, repository search, claim extraction, small experiment or proof, evaluation, repeat only when the last step produced stronger evidence.
    - Prefer repository-local evidence. Put external/reference clones or experiments under `.self-harness/tmp/`.
+   - When external references are requested, keep raw notes under `.self-harness/tmp/` and promote only short source names, URLs, and local implications into durable files.
 
 2. Retrieve local evidence.
    - Run the task-specific `scripts/query-docs.sh` probes from the mailbox request.
    - Search for prior art with `rg`, including negative searches for named mechanisms such as `darwin`, `auto_research`, or `notification` when the request asks for them.
-   - If no named local reference exists, say so and infer only from available repository evidence.
+   - If no named local reference exists, say so. If a trustworthy external reference exists, compare its mechanism against this repository's constraints before inferring a bounded local rule.
 
 3. Choose the durable artifact.
    - New or updated skill: use for repeatable judgment or workflow that future agents should select by task.
@@ -34,6 +35,28 @@ Recall phrases: skill-first branch delivery; skill first branch delivery.
    - Retention: keep only the smallest artifact that changes future behavior.
    - Rejection: explicitly leave branch-local, noisy, private, lineage-specific, or unproved material out of `main`.
    - Freshness: record supersession or deferral when newer evidence corrects an older candidate.
+
+## Research-Backed Skill Evolution Loop
+
+Use this smallest loop when the artifact under consideration is a skill or skill update:
+
+1. Question: ask one operational question, for example "What checklist change would make future branch-delivery reports less noisy?"
+2. Evidence: gather required repository probes, negative searches, and any requested external reference. Extract claims only when they change a local rule.
+3. Variation: write one candidate skill change and one explicit alternative, including "memory-only" or "refuse" when that is plausible. Keep the candidate's write surface to one skill unless a script or memory note is necessary for proof.
+4. Fitness: choose a before-and-after signal before editing. Acceptable signals include `scripts/query-docs.sh` recall for likely terms, a focused fixture or validation command, mailbox acceptance criteria, an independent later use of the skill, or a patch/dry-run against the intended target.
+5. Retention: keep the candidate only if it changes future behavior and the fitness signal is inspectable from repository-visible evidence. Otherwise record a bounded refusal or memory note.
+6. Rejection: state what was deliberately not retained, such as broad essays, private scratch notes, branch identity, raw external clones, unvalidated rewrites, or changes that would create noisy self-modification.
+7. Freshness: record whether the change supersedes, narrows, or merely adds evidence to older memory or skills. Prefer a new memory decision over rewriting completed mailbox or diary evidence.
+
+For this repository, Darwin-style selection pressure means variation plus measured retention, not uncontrolled self-editing. External evolutionary-agent patterns are only useful when they can be reduced to local proof: an isolated candidate, a runnable or queryable fitness check, and a durable keep/reject decision.
+
+## Skill Evolution Terms
+
+- Variation: the smallest candidate behavior change, plus at least one non-skill alternative.
+- Fitness evidence: a rerunnable command, query, fixture, acceptance criterion, or later independent use showing the skill is easier to find, more precise, safer, or more useful than before.
+- Retention: the reviewed part that remains in `skills/`, `scripts/`, `memory/`, or `mailbox/outbox/` because it changed future behavior.
+- Rejection: material left out because it is one-off, noisy, private, local to one lineage, unvalidated, or better suited to memory/proposal/outbox.
+- Freshness: explicit relationship to older evidence, including superseded rules, deferrals, source dates, or conditions that should trigger reevaluation.
 
 5. Use this feature-based report template for future `main` evolution reports:
 
