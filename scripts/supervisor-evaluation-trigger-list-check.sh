@@ -575,6 +575,88 @@ OUTBOX
   log "ignores trigger-review source path meta terms without changed-artifact evidence"
 }
 
+check_surfaces_trigger_review_concrete_artifact_terms() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-concrete-artifact"
+  log_file="${WORK_DIR}/trigger-review-concrete-artifact.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-trigger-review-concrete-artifact.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-trigger-review-concrete-artifact"
+title: "Trigger Review Concrete Artifact"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "trigger-review-concrete-artifact"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal with source-path meta plus a concrete artifact path."
+related: []
+---
+
+# Trigger Review Concrete Artifact
+
+No next supervisor pressure: further trigger-review escalation for the source would be noisy unless a concrete artifact changes.
+
+Supervisor evaluation trigger: run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3`; if `mailbox/outbox/2026-05-08-status-sync-v3-proof-reply.md` gains new later evidence from changed status-sync artifact `mailbox/outbox/attachments/2026-05-08-status-sync-v3-main-target.patch`, issue one defect-specific challenge.
+
+Stop condition: if only the source path repeats, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: trigger review concrete artifact"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-08-later-concrete-artifact.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-concrete-artifact"
+title: "Later Concrete Artifact"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-08"
+updated: "2026-05-08"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-concrete-artifact"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later evidence naming a concrete changed artifact."
+related: []
+---
+
+# Later Concrete Artifact
+
+The changed status-sync artifact `mailbox/outbox/attachments/2026-05-08-status-sync-v3-main-target.patch` has a new hygiene finding.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'status: review-evidence' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "concrete changed artifact term should create review evidence"
+  }
+  rg -q 'mailbox/outbox/2026-05-08-later-concrete-artifact.md' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "later concrete artifact evidence should be named"
+  }
+  rg -q 'mailbox/outbox/attachments/2026-05-08-status-sync-v3-main-target.patch' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "matched concrete artifact term should be reported"
+  }
+  log "surfaces trigger-review concrete changed artifact evidence"
+}
+
 main() {
   rm -rf "$WORK_DIR"
   mkdir -p "$WORK_DIR"
@@ -587,6 +669,7 @@ main() {
   check_existing_file_old_term_does_not_count_after_unrelated_edit
   check_ignores_trigger_review_scaffold_only_terms
   check_ignores_trigger_review_source_path_meta_terms
+  check_surfaces_trigger_review_concrete_artifact_terms
   log "ok"
 }
 

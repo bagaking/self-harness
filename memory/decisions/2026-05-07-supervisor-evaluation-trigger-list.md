@@ -74,6 +74,7 @@ The fixture proves these cases:
 - old matching terms in an existing file do not count after an unrelated later edit.
 - trigger-review scaffold-only lifecycle evidence does not create review evidence.
 - trigger-review source-path meta terms do not create review evidence unless a concrete changed artifact term also appears.
+- trigger-review concrete changed artifact terms still create review evidence.
 
 Live evidence on this branch: `scripts/supervisor.sh triggers --limit 5 --status review` surfaced `mailbox/outbox/2026-05-07-feedback-refusal-trigger-reply.md` and pointed to later durable evidence from this run. `scripts/supervisor.sh triggers --limit 5 --status quiet` listed this run's uncommitted trigger-source reply as `no-later-evidence`, which keeps same-run notes from masquerading as later proof before the supervisor commit exists.
 
