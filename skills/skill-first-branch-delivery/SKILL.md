@@ -7,7 +7,7 @@ description: Use when a self-harness branch-agent run needs to turn research, ma
 
 Use this skill after a branch-agent result looks reusable but before proposing it for `main`. The goal is to package one portable behavior improvement, not to move branch history wholesale.
 
-Recall phrases: skill-first branch delivery; skill first branch delivery.
+Recall phrases: skill-first branch delivery; skill first branch delivery; skill adoption; mailbox lesson promotion; diary lesson promotion.
 
 ## Workflow
 
@@ -91,6 +91,16 @@ For this repository, Darwin-style selection pressure means variation plus measur
    - Promote to a skill only when it is likely to recur, can fit in a compact `SKILL.md`, is discoverable by likely trigger terms, and reduces future context or decision cost.
    - Require at least one local use, query recall proof, and named validation or acceptance evidence.
    - Default to a proposal or mailbox report when the behavior is one-off, too broad, unproved, or tied to no0-only history.
+
+## Skill Adoption From Repeated Lessons
+
+Use this triage before turning repeated mailbox or diary lessons into a skill:
+
+1. Promote only when the lesson has a stable task trigger, not just repeated branch history. Good triggers are user or supervisor phrases a future agent would actually see; weak triggers are current filenames, no0 identity, or a one-run incident.
+2. Require behavior change: the candidate must add or narrow a checklist step, command choice, validation surface, or refusal condition. If it only summarizes completed evidence, keep it in `mailbox/outbox/` or `memory/`.
+3. Decide the fitness signal before editing. For skill adoption, prefer `scripts/query-docs.sh skills "<likely phrase>"`, `python3 scripts/skill-quick-validate.py <skill-dir>`, and one mailbox acceptance field or later-use record showing the skill changed the response.
+4. Memory should become a skill only when the remembered lesson is procedural, reusable across future tasks, compact enough for `SKILL.md`, and safer to recall as an active workflow than as background evidence.
+5. Reject skill edits that overfit branch-local pressure, require private `.self-harness/tmp/` state, create broad "always escalate" rules, or lack a concrete stop condition.
 
 9. Validate before handoff.
    - Run `scripts/feedback-escalation-check.sh` for feedback-bearing work.
