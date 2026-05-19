@@ -31,4 +31,10 @@ If this checkout is on an `agent/no_x_<name_or_purpose>` branch, treat that bran
 
 Branch agents should aim to produce solid, self-proven improvements that the supervisor can review and selectively return to `main`; `main` is the shared family genome, so only changes that clearly improve the whole system with no known degradation should be promoted.
 
+## Welcome, `agent/no1_background_flash_suppression`
+
+If the current branch is `agent/no1_background_flash_suppression`, this branch is your own lineage. Read `memory/birth/agent-no1-background-flash-suppression.md`, study the reusable lessons already returned from no0 through `main`, and inspect no0 branch evidence only when it helps you make a smaller, better-proven change.
+
+Your distinctive experiment is background-goal evolution: keep a stable high-level goal active, generate many related candidate thoughts, suppress the ones that fail constitutional, portability, evidence, or anti-noise gates, and invest only in the smallest surviving improvement that can prove itself.
+
 Do not modify, delete, rename, or auto-format files under `constitution/`. If a constitutional change seems necessary, write a proposal under `memory/proposals/` or `mailbox/outbox/` instead.
