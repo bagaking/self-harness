@@ -5,7 +5,7 @@ type: "memory"
 status: "active"
 owner: "agent"
 created: "2026-05-07"
-updated: "2026-05-09"
+updated: "2026-05-20"
 tags:
   - decision
   - supervisor
@@ -58,6 +58,8 @@ On 2026-05-09 another live trigger-review challenge exposed a read-only script-r
 
 Later on 2026-05-09 the same source exposed a lifecycle-marker variant. A trigger-review stop condition can say a prior source path should reopen only if that source "reappears from" a narrow evidence class. A later report may name that source path only as `trigger-review-source:` or in related metadata while classifying it as covered. That lifecycle marker is not the watched evidence class. The matcher now treats "reappears from" trigger-review wording as source-path meta unless the trigger also names a concrete artifact path.
 
+On 2026-05-20 a trigger-review challenge exposed another source-path-meta variant. A source asked the supervisor to rerun `scripts/branch-stop-condition-check.sh ...`, `scripts/query-docs.sh skills "future mailbox challenge after commit"`, and `python3 scripts/skill-quick-validate.py skills/mailbox-processing`, then reopen only if a later seeded mailbox challenge was bounced forward without a gate-specific refusal or validated skill decision. A later closure cited those validation commands as passing proof and preserved `trigger-review-source:`; that is not evidence of the bounce condition. The matcher now treats `scripts/branch-stop-condition-check.sh ...`, `scripts/query-docs.sh ...`, and `python3 scripts/skill-quick-validate.py ...` citations inside seeded-challenge trigger-review reopen/stop-condition prose as scaffold. A separate fixture proves that actual validator-failure triggers still create review evidence.
+
 ## Why
 
 The previous feedback gate made refusals name a future trigger, but a future supervisor still had to remember to surface and evaluate those triggers. A clean mailbox plus `task_complete` could still look sufficient even when a trigger-backed refusal had later evidence.
@@ -87,6 +89,8 @@ The fixture proves these cases:
 - trigger-review concrete changed artifact terms still create review evidence.
 - repeated source-path prose wording does not create trigger-review evidence by itself.
 - trigger-review fixture validation command citations do not create trigger-review evidence by themselves.
+- trigger-review validation command citations for branch stop, skill recall, and skill validation do not create review evidence by themselves when the concrete condition is a later seeded mailbox challenge bounce.
+- actual trigger-review validation command failures still create review evidence.
 - trigger-review concrete outbox Markdown artifact terms still create review evidence.
 - read-only reviewed script path mentions and explicit no-change lines do not create review evidence.
 - durable reports that explicitly say a watched supervisor script changed still create review evidence.

@@ -879,6 +879,159 @@ OUTBOX
   log "ignores trigger-review fixture validation command citations"
 }
 
+check_ignores_trigger_review_validation_command_citations() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-validation-command-citation"
+  log_file="${WORK_DIR}/trigger-review-validation-command-citation.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-20-post-run-pressure-skill-adoption-reply.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-post-run-pressure-skill-adoption-reply"
+title: "Post Run Pressure Skill Adoption Reply"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-20"
+updated: "2026-05-20"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "post-run-pressure-skill-adoption-reply"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal with validation commands in the trigger."
+related: []
+---
+
+# Post Run Pressure Skill Adoption Reply
+
+No next supervisor pressure: further escalation would be noisy because the seeded challenge was already answered by a validated skill update.
+
+Supervisor evaluation trigger: run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3`, `scripts/branch-stop-condition-check.sh --run-limit 5 --trigger-limit 8 --evidence-limit 3`, `scripts/query-docs.sh skills "future mailbox challenge after commit"`, and `python3 scripts/skill-quick-validate.py skills/mailbox-processing`; reopen only if a later seeded post-run mailbox challenge is bounced forward without a gate-specific refusal or validated skill decision.
+
+Stop condition: stop this pressure line when those commands pass and no later seeded post-run mailbox challenge repeats the same bounce pattern.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: trigger review validation commands"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-20-later-closure.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-closure"
+title: "Later Closure"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-20"
+updated: "2026-05-20"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-closure"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later closure that cites validation commands as passing proof."
+related: []
+trigger-review-source: "mailbox/outbox/2026-05-20-post-run-pressure-skill-adoption-reply.md"
+---
+
+# Later Closure
+
+Verification reran `scripts/branch-stop-condition-check.sh --run-limit 5 --trigger-limit 8 --evidence-limit 3`, `scripts/query-docs.sh skills "future mailbox challenge after commit"`, and `python3 scripts/skill-quick-validate.py skills/mailbox-processing`; all passed. No later seeded post-run mailbox challenge was bounced forward.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "trigger-review validation command citations should not create review evidence"
+  }
+  log "ignores trigger-review validation command citations"
+}
+
+check_surfaces_trigger_review_validation_command_failures() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-validation-command-failure"
+  log_file="${WORK_DIR}/trigger-review-validation-command-failure.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-20-validator-trigger.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-validator-trigger"
+title: "Validator Trigger"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-20"
+updated: "2026-05-20"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "validator-trigger"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review source whose concrete trigger is validator failure."
+related: []
+---
+
+# Validator Trigger
+
+No next supervisor pressure: further escalation would be noisy while the validator passes.
+
+Supervisor evaluation trigger: run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3` and `python3 scripts/skill-quick-validate.py skills/example`; reopen only if `python3 scripts/skill-quick-validate.py skills/example` fails.
+
+Stop condition: if the validator passes, stop.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: validation command failure trigger"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-20-validator-failed.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-validator-failed"
+title: "Validator Failed"
+type: "mailbox-message"
+status: "done"
+owner: "agent"
+created: "2026-05-20"
+updated: "2026-05-20"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "validator-failed"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later evidence that reports validator failure."
+related: []
+---
+
+# Validator Failed
+
+`python3 scripts/skill-quick-validate.py skills/example` failed and needs a defect-specific repair.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'status: review-evidence' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "validation command failures should create review evidence"
+  }
+  rg -q 'mailbox/outbox/2026-05-20-validator-failed.md' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "validation command failure evidence should be named"
+  }
+  log "surfaces trigger-review validation command failures"
+}
+
 check_ignores_trigger_review_source_path_trigger_condition() {
   local sandbox log_file
   sandbox="${WORK_DIR}/trigger-review-source-path-trigger-condition"
@@ -1488,6 +1641,8 @@ main() {
   check_surfaces_trigger_review_concrete_artifact_terms
   check_ignores_trigger_review_repeated_source_path_prose_wording
   check_ignores_trigger_review_fixture_command_citation
+  check_ignores_trigger_review_validation_command_citations
+  check_surfaces_trigger_review_validation_command_failures
   check_ignores_trigger_review_source_path_trigger_condition
   check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms
   check_ignores_directory_prefix_trigger_prose_mentions

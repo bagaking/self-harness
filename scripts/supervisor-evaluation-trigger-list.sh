@@ -215,6 +215,13 @@ write_trigger_needles() {
           lower_text ~ /fixture[^.]{0,80}fail/) {
         return 1
       }
+      if (trigger_review_meta &&
+          lower_text ~ /(later seeded post-run mailbox challenge|seeded post-run mailbox challenge|bounced forward|same bounce pattern)/ &&
+          (lower_value ~ /^scripts\/query-docs\.sh[[:space:]]/ ||
+           lower_value ~ /^scripts\/branch-stop-condition-check\.sh([[:space:]]|$)/ ||
+           lower_value ~ /^python3[[:space:]]+scripts\/skill-quick-validate\.py[[:space:]]/)) {
+        return 1
+      }
       if (is_trigger_review_meta_needle(lower_value, lower_prefix)) {
         return 1
       }
@@ -223,7 +230,7 @@ write_trigger_needles() {
     {
       text = $0
       lower_text = tolower(text)
-      trigger_review_meta = (lower_text ~ /scripts\/supervisor\.sh[[:space:]]+triggers/ && lower_text ~ /(gains new later evidence|review-evidence source|review evidence from repeated source-path prose|trigger-review source|reappears[^.]{0,80}from|reappears only because[^.]*later record[^.]*repeats|listed only because[^.]*repeats|source-path meta)/)
+      trigger_review_meta = (lower_text ~ /scripts\/supervisor\.sh[[:space:]]+triggers/ && lower_text ~ /(gains new later evidence|review-evidence source|review evidence from repeated source-path prose|trigger-review source|reappears[^.]{0,80}from|reappears only because[^.]*later record[^.]*repeats|listed only because[^.]*repeats|source-path meta|reopen only if|reopen if a later|stop this pressure line)/)
       while (match(text, /`[^`]+`/)) {
         value = substr(text, RSTART + 1, RLENGTH - 2)
         lower_value = tolower(value)
