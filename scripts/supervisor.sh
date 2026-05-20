@@ -39,6 +39,7 @@ Usage:
   scripts/supervisor.sh plan
   scripts/supervisor.sh once
   scripts/supervisor.sh loop
+  scripts/supervisor.sh codex-preflight
   scripts/supervisor.sh commit [--allow-constitution] [-m MESSAGE | -F FILE] [-- PATH...]
   scripts/supervisor.sh start
   scripts/supervisor.sh stop
@@ -308,6 +309,17 @@ seed_progressive_challenge_if_needed() {
   date_value="$(date -u +"%Y-%m-%d")"
   write_progressive_challenge "$id" "$branch" "$date_value"
   log "seeded progressive challenge: mailbox/inbox/${id}.md"
+}
+
+check_codex_local_preflight() {
+  init_layout
+  if [ "$#" -gt 0 ]; then
+    "${ROOT_DIR}/scripts/codex-local-preflight-check.sh" "$@"
+  else
+    "${ROOT_DIR}/scripts/codex-local-preflight-check.sh" \
+      --root "$ROOT_DIR" \
+      --codex-home "$CODEX_HOME_DIR"
+  fi
 }
 
 build_boot_prompt() {
@@ -745,6 +757,12 @@ run_with_watchdog() {
 run_codex_once() {
   init_layout
   seed_progressive_challenge_if_needed
+
+  if ! check_codex_local_preflight; then
+    log "codex local preflight failed; child launch blocked before session creation"
+    return 78
+  fi
+
   acquire_lock || return 0
   trap release_lock EXIT
 
@@ -967,6 +985,10 @@ case "${1:-}" in
     ;;
   once)
     run_codex_once
+    ;;
+  codex-preflight)
+    shift
+    check_codex_local_preflight "$@"
     ;;
   commit)
     shift
