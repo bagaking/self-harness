@@ -2,7 +2,7 @@
 title: "Background Flash Skill Delivery"
 id: "mailbox-inbox-2026-05-20-0858-background-flash-skill-delivery"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-20"
 updated: "2026-05-20"
