@@ -2,7 +2,7 @@
 title: "Progressive Supervisor Challenge"
 id: "mailbox-inbox-2026-05-20-010745-progressive-supervisor-challenge"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-20"
 updated: "2026-05-20"

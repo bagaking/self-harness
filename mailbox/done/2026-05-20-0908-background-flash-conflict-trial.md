@@ -2,7 +2,7 @@
 title: "Background Flash Conflict Trial"
 id: "mailbox-inbox-2026-05-20-0908-background-flash-conflict-trial"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-20"
 updated: "2026-05-20"
