@@ -2,7 +2,7 @@
 title: "Feedback Pressure Challenge"
 id: "mailbox-inbox-2026-05-20-013834-feedback-pressure-challenge"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-20"
 updated: "2026-05-20"
