@@ -122,6 +122,7 @@ Usage:
   scripts/supervisor.sh feedback [-F FILE] [--] FEEDBACK...
   scripts/supervisor.sh triggers [--limit N] [--evidence-limit N] [--status all|review|quiet]
   scripts/supervisor.sh claim-latency [--max-seconds N] [SESSION...]
+  scripts/supervisor.sh codex-preflight
   scripts/supervisor.sh boot-prompt [MODE]
   scripts/supervisor.sh completed-records
   scripts/supervisor.sh docs-fixture
@@ -1177,6 +1178,17 @@ check_docs_fixture() {
   "${ROOT_DIR}/scripts/docs-check-fixture-check.sh" "$@"
 }
 
+check_codex_local_preflight() {
+  init_layout
+  if [ "$#" -gt 0 ]; then
+    "${ROOT_DIR}/scripts/codex-local-preflight-check.sh" "$@"
+  else
+    "${ROOT_DIR}/scripts/codex-local-preflight-check.sh" \
+      --root "$ROOT_DIR" \
+      --codex-home "$CODEX_HOME_DIR"
+  fi
+}
+
 changed_outbox_files_with_next_pressure_marker() {
   local rel file
   while IFS= read -r rel; do
@@ -2145,6 +2157,11 @@ run_codex_once() {
     fi
   fi
 
+  if ! check_codex_local_preflight; then
+    supervisor_notify "failure" "failed" "codex local preflight failed" "child launch blocked before session creation"
+    return 78
+  fi
+
   acquire_lock || return 0
   trap release_lock EXIT
 
@@ -2469,6 +2486,10 @@ case "${1:-}" in
   claim-latency)
     shift
     check_pending_inbox_claim_latency "$@"
+    ;;
+  codex-preflight)
+    shift
+    check_codex_local_preflight "$@"
     ;;
   boot-prompt)
     shift
