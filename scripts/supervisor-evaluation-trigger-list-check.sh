@@ -954,6 +954,154 @@ OUTBOX
   log "ignores trigger-review validation command citations"
 }
 
+check_ignores_target_branch_seed_packet_condition() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/target-branch-seed-packet-condition"
+  log_file="${WORK_DIR}/target-branch-seed-packet-condition.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-20-target-branch-seed.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-target-branch-seed"
+title: "Target Branch Seed"
+type: "mailbox-message"
+status: "done"
+owner: "agent/trigger-list-check"
+created: "2026-05-20"
+updated: "2026-05-20"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "target-branch-seed"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal whose trigger depends on a target branch reply."
+related: []
+---
+
+# Target Branch Seed
+
+No next supervisor pressure: further escalation from this branch would be noisy because the seed packet is already written and the remaining work belongs to the target branch.
+
+Supervisor evaluation trigger: after the supervisor applies the seed packet on `agent/no1_background_flash_suppression` and no1 commits its reply, run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3` and inspect the new no1 outbox only if it claims main-promotion readiness.
+
+Smaller useful task: create the seed packet on the target branch, then launch that branch in new mode.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: target branch seed trigger"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-20-later-marker.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-marker"
+title: "Later Marker"
+type: "mailbox-message"
+status: "done"
+owner: "agent/trigger-list-check"
+created: "2026-05-20"
+updated: "2026-05-20"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-marker"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later marker that mentions the target branch but is not the target branch reply."
+related: []
+---
+
+# Later Marker
+
+The existing handoff still names `agent/no1_background_flash_suppression`, but this current-branch marker is not a new no1 outbox and does not claim main-promotion readiness.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "target-branch seed-packet condition should not fire from current-branch branch-name mentions"
+  }
+  log "ignores target-branch seed-packet conditions without a target-branch reply"
+}
+
+check_ignores_trigger_review_branch_stop_command_citation() {
+  local sandbox log_file
+  sandbox="${WORK_DIR}/trigger-review-branch-stop-command-citation"
+  log_file="${WORK_DIR}/trigger-review-branch-stop-command-citation.log"
+  prepare_sandbox "$sandbox"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-20-branch-stop-trigger.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-branch-stop-trigger"
+title: "Branch Stop Trigger"
+type: "mailbox-message"
+status: "done"
+owner: "agent/trigger-list-check"
+created: "2026-05-20"
+updated: "2026-05-20"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "branch-stop-trigger"
+tags:
+  - mailbox
+  - feedback-pressure
+  - trigger-review
+summary: "Fixture trigger-review refusal whose trigger uses branch-stop as validation scaffold."
+related: []
+---
+
+# Branch Stop Trigger
+
+No next supervisor pressure: further escalation would be noisy because the source marker is already written.
+
+Supervisor evaluation trigger: run `scripts/supervisor.sh triggers --status review --limit 8 --evidence-limit 3` and `scripts/branch-stop-condition-check.sh --run-limit 5 --trigger-limit 8 --evidence-limit 3`; reopen only if the source still points to unmarked next-pressure debt.
+
+Stop condition: if `scripts/branch-stop-condition-check.sh --run-limit 5 --trigger-limit 8 --evidence-limit 3` passes after this reply is committed, stop this pressure line.
+OUTBOX
+
+  git -C "$sandbox" add --all -- .
+  git -C "$sandbox" commit -q -m "fixture: branch stop trigger"
+
+  cat >"${sandbox}/mailbox/outbox/2026-05-20-later-branch-stop-proof.md" <<'OUTBOX'
+---
+id: "mailbox-outbox-later-branch-stop-proof"
+title: "Later Branch Stop Proof"
+type: "mailbox-message"
+status: "done"
+owner: "agent/trigger-list-check"
+created: "2026-05-20"
+updated: "2026-05-20"
+from: "agent/trigger-list-check"
+to: "supervisor"
+message_id: "later-branch-stop-proof"
+tags:
+  - mailbox
+  - feedback-pressure
+summary: "Fixture later proof that cites only a passing branch-stop validation command."
+related: []
+---
+
+# Later Branch Stop Proof
+
+Verification reran `scripts/branch-stop-condition-check.sh --run-limit 5 --trigger-limit 8 --evidence-limit 3`, and it passed. No unmarked next-pressure debt remains.
+OUTBOX
+
+  (
+    cd "$sandbox"
+    bash scripts/supervisor-evaluation-trigger-list.sh --limit 1 --status review
+  ) >"$log_file" 2>&1
+
+  rg -q 'no triggers matched status filter review' "$log_file" || {
+    sed -n '1,180p' "$log_file" >&2
+    fail "branch-stop validation command citations should not create review evidence"
+  }
+  log "ignores trigger-review branch-stop command citations"
+}
+
 check_surfaces_trigger_review_validation_command_failures() {
   local sandbox log_file
   sandbox="${WORK_DIR}/trigger-review-validation-command-failure"
@@ -1642,6 +1790,8 @@ main() {
   check_ignores_trigger_review_repeated_source_path_prose_wording
   check_ignores_trigger_review_fixture_command_citation
   check_ignores_trigger_review_validation_command_citations
+  check_ignores_target_branch_seed_packet_condition
+  check_ignores_trigger_review_branch_stop_command_citation
   check_surfaces_trigger_review_validation_command_failures
   check_ignores_trigger_review_source_path_trigger_condition
   check_surfaces_trigger_review_concrete_outbox_markdown_artifact_terms

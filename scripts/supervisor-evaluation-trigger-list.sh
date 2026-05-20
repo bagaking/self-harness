@@ -210,6 +210,10 @@ write_trigger_needles() {
           lower_value ~ /--status[[:space:]]+review/) {
         return 1
       }
+      if (lower_value ~ /^agent\/[^[:space:]`]+$/ &&
+          lower_text ~ /(appl(y|ies)[^.]{0,80}seed packet|commits? its reply|new[[:space:]][^.]{0,40}outbox)/) {
+        return 1
+      }
       if (lower_value == "scripts/supervisor-evaluation-trigger-list-check.sh" &&
           trigger_review_meta &&
           lower_text ~ /fixture[^.]{0,80}fail/) {
@@ -220,6 +224,11 @@ write_trigger_needles() {
           (lower_value ~ /^scripts\/query-docs\.sh[[:space:]]/ ||
            lower_value ~ /^scripts\/branch-stop-condition-check\.sh([[:space:]]|$)/ ||
            lower_value ~ /^python3[[:space:]]+scripts\/skill-quick-validate\.py[[:space:]]/)) {
+        return 1
+      }
+      if (trigger_review_meta &&
+          lower_value ~ /^scripts\/branch-stop-condition-check\.sh([[:space:]]|$)/ &&
+          lower_text ~ /(reopen only if|stop this|stop condition|passes after|can now verify)/) {
         return 1
       }
       if (is_trigger_review_meta_needle(lower_value, lower_prefix)) {

@@ -60,6 +60,10 @@ Later on 2026-05-09 the same source exposed a lifecycle-marker variant. A trigge
 
 On 2026-05-20 a trigger-review challenge exposed another source-path-meta variant. A source asked the supervisor to rerun `scripts/branch-stop-condition-check.sh ...`, `scripts/query-docs.sh skills "future mailbox challenge after commit"`, and `python3 scripts/skill-quick-validate.py skills/mailbox-processing`, then reopen only if a later seeded mailbox challenge was bounced forward without a gate-specific refusal or validated skill decision. A later closure cited those validation commands as passing proof and preserved `trigger-review-source:`; that is not evidence of the bounce condition. The matcher now treats `scripts/branch-stop-condition-check.sh ...`, `scripts/query-docs.sh ...`, and `python3 scripts/skill-quick-validate.py ...` citations inside seeded-challenge trigger-review reopen/stop-condition prose as scaffold. A separate fixture proves that actual validator-failure triggers still create review evidence.
 
+Later on 2026-05-20, a target-branch seed-packet trigger exposed another false-positive class. The trigger said to reopen only after the supervisor applies a seed packet on `agent/no1_background_flash_suppression`, no1 commits its reply, and a new no1 outbox claims main-promotion readiness. Later no0 lifecycle markers repeated the target branch name while explaining the handoff boundary, but they were not no1 replies. The matcher now ignores backticked `agent/...` branch names when they appear in seed-packet, target-branch commit, or "new outbox" trigger conditions. The fixture still allows concrete changed artifacts, validator failures, and explicit script-change reports to surface.
+
+The same run exposed a branch-stop command-citation variant during final validation. A trigger-review source may cite `scripts/branch-stop-condition-check.sh ...` as the validation command and say to reopen only if unmarked debt still exists. A later report that reruns that command and says it passed is closure evidence, not proof that the trigger fired. The matcher now treats branch-stop command citations as scaffold in trigger-review meta lines whose concrete condition is a later reopen or stop decision.
+
 ## Why
 
 The previous feedback gate made refusals name a future trigger, but a future supervisor still had to remember to surface and evaluate those triggers. A clean mailbox plus `task_complete` could still look sufficient even when a trigger-backed refusal had later evidence.
@@ -90,6 +94,8 @@ The fixture proves these cases:
 - repeated source-path prose wording does not create trigger-review evidence by itself.
 - trigger-review fixture validation command citations do not create trigger-review evidence by themselves.
 - trigger-review validation command citations for branch stop, skill recall, and skill validation do not create review evidence by themselves when the concrete condition is a later seeded mailbox challenge bounce.
+- target-branch seed-packet trigger conditions do not fire from later current-branch branch-name mentions before the target branch reply exists.
+- trigger-review branch-stop command citations do not create review evidence by themselves when the concrete condition is unresolved marker debt.
 - actual trigger-review validation command failures still create review evidence.
 - trigger-review concrete outbox Markdown artifact terms still create review evidence.
 - read-only reviewed script path mentions and explicit no-change lines do not create review evidence.
