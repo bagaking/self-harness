@@ -236,13 +236,64 @@ recent_low_value_subjects() {
     || true
 }
 
+recent_outbox_files() {
+  {
+    git -C "$ROOT_DIR" log --name-only --format= -n 40 -- mailbox/outbox 2>/dev/null || true
+    find "${ROOT_DIR}/mailbox/outbox" -maxdepth 1 -type f -name '*.md' 2>/dev/null \
+      | while IFS= read -r file; do
+        printf '%s\n' "${file#${ROOT_DIR}/}"
+      done \
+      | sort -r
+  } | awk '/^mailbox\/outbox\/.*\.md$/ && !seen[$0]++ { print }'
+}
+
+latest_outbox_supervisor_pressure() {
+  local rel file line text
+
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    file="${ROOT_DIR}/${rel}"
+    [ -f "$file" ] || continue
+
+    line="$(awk '
+      /^(Next supervisor pressure|No next supervisor pressure):/ {
+        value = $0
+      }
+      END {
+        print value
+      }
+    ' "$file")"
+    [ -n "$line" ] || continue
+
+    case "$line" in
+      "Next supervisor pressure:"*)
+        text="${line#Next supervisor pressure:}"
+        text="$(printf '%s' "$text" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+        printf -- '- Latest outbox next supervisor pressure (%s): %s\n' "$rel" "$text"
+        return 0
+        ;;
+      "No next supervisor pressure:"*)
+        text="${line#No next supervisor pressure:}"
+        text="$(printf '%s' "$text" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+        printf -- '- Latest outbox bounded stop condition (%s): %s\n' "$rel" "$text"
+        return 0
+        ;;
+    esac
+  done < <(recent_outbox_files)
+}
+
 write_progressive_challenge() {
   local id="$1"
   local branch="$2"
   local date_value="$3"
   local file="${ROOT_DIR}/mailbox/inbox/${id}.md"
-  local recent
-  recent="$(recent_low_value_subjects | sed 's/^/- /')"
+  local recent pressure
+  pressure="$(latest_outbox_supervisor_pressure || true)"
+  if [ -n "$pressure" ]; then
+    recent="$pressure"
+  else
+    recent="$(recent_low_value_subjects | sed 's/^/- /')"
+  fi
   if [ -z "$recent" ]; then
     recent="- No explicit next inbox task exists; the supervisor must turn idle time into a harder question instead of another passive sweep."
   fi
@@ -274,6 +325,10 @@ The supervisor generated this because no pending inbox message was available. A 
 Feedback signal:
 
 ${recent}
+
+If the feedback signal includes a latest outbox pressure or stop condition, treat
+that line as the specific pressure to answer rather than repeating a generic
+process review.
 
 ## Task
 
