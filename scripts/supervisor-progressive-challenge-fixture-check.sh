@@ -75,8 +75,22 @@ check_latest_outbox_pressure_is_carried_forward() {
     || fail "generated challenge did not tell the agent to answer the carried pressure"
 }
 
+check_supervisor_change_detection() {
+  local original
+
+  prepare_sandbox
+  source_supervisor_functions
+  SCRIPT_PATH="${WORK_DIR}/supervisor-functions.sh"
+
+  original="$(supervisor_script_fingerprint)"
+  printf '\n# changed during loop\n' >>"$SCRIPT_PATH"
+  supervisor_script_changed_since "$original" \
+    || fail "supervisor script change was not detected"
+}
+
 main() {
   check_latest_outbox_pressure_is_carried_forward
+  check_supervisor_change_detection
   fixture_log "ok"
 }
 

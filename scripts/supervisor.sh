@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_PATH="${SCRIPT_DIR}/$(basename "${BASH_SOURCE[0]}")"
 
 PRIVATE_DIR="${ROOT_DIR}/.self-harness"
 RUN_DIR="${PRIVATE_DIR}/run"
@@ -364,6 +365,27 @@ seed_progressive_challenge_if_needed() {
   date_value="$(date -u +"%Y-%m-%d")"
   write_progressive_challenge "$id" "$branch" "$date_value"
   log "seeded progressive challenge: mailbox/inbox/${id}.md"
+}
+
+supervisor_script_fingerprint() {
+  [ -f "$SCRIPT_PATH" ] || return 1
+  cksum "$SCRIPT_PATH" | awk '{ print $1 ":" $2 }'
+}
+
+supervisor_script_changed_since() {
+  local original="$1"
+  local current
+  [ -n "$original" ] || return 1
+  current="$(supervisor_script_fingerprint || true)"
+  [ -n "$current" ] && [ "$current" != "$original" ]
+}
+
+reexec_loop_if_supervisor_changed() {
+  local original="$1"
+  if supervisor_script_changed_since "$original"; then
+    log "supervisor script changed; re-executing loop before next cycle"
+    exec "$SCRIPT_PATH" loop
+  fi
 }
 
 check_codex_local_preflight() {
@@ -879,12 +901,15 @@ run_codex_once() {
 
 run_loop() {
   init_layout
+  local loop_supervisor_fingerprint
+  loop_supervisor_fingerprint="$(supervisor_script_fingerprint || true)"
   while true; do
     local status=0
     run_codex_once || status=$?
     if [ "$status" -ne 0 ]; then
       log "run failed with status ${status}"
     fi
+    reexec_loop_if_supervisor_changed "$loop_supervisor_fingerprint"
     sleep "$INTERVAL_SECONDS"
   done
 }
