@@ -2,7 +2,7 @@
 title: "No1 Return-To-Main Strict Review"
 id: "mailbox-inbox-2026-05-20-0918-no1-return-main-strict-review"
 type: "mailbox-inbox"
-status: "pending"
+status: "done"
 owner: "supervisor"
 created: "2026-05-20"
 updated: "2026-05-20"
